@@ -1,0 +1,6 @@
+{
+  "name": "AerovaX",
+  "description": "AerovaX - A next-generation Comprehensive School Management Operating System featuring a Professional Automated Fees Management System, Admin Dashboard, Teacher Portal, and Parent Access.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["firebase", "authentication", "firestore"]
+}

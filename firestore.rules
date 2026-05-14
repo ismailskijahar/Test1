@@ -1,0 +1,304 @@
+rules_version = '2';
+ service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read: if isSignedIn() && isSuperAdminEmail();
+      allow write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() { 
+      return request.auth != null && (
+        request.auth.token.firebase.sign_in_provider == 'anonymous' || 
+        request.auth.token.email_verified == true || 
+        request.auth.token.email == 'ismailskijahar@gmail.com'
+      ); 
+    }
+    
+    function getProfile() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data 
+        : null;
+    }
+
+    function isRole(p, r) { return p != null && p.get('role', 'none') == r; }
+    function isSuperAdmin() {
+      return request.auth != null && request.auth.token.email == 'ismailskijahar@gmail.com';
+    }
+    function isSuperAdminEmail() {
+      return request.auth != null && request.auth.token.email == 'ismailskijahar@gmail.com';
+    }
+
+    function isAdmin(p) { 
+      return isSuperAdmin() || isRole(p, 'super_admin') || isRole(p, 'school_admin') || isRole(p, 'admin'); 
+    }
+    function isTeacher(p) { return isRole(p, 'teacher'); }
+    function isParent(p) { return isRole(p, 'parent'); }
+    function isAccountant(p) { return isRole(p, 'accountant'); }
+    
+    function belongsToSchool(p, sid) {
+      return isSuperAdmin() || (p != null && (p.get('school_id', 'none') == sid || isRole(p, 'super_admin')));
+    }
+
+    function isSystemUser() {
+      return isSignedIn();
+    }
+
+    // --- Validation Helpers ---
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidStudent(data) {
+      return data.name is string && data.name.size() <= 100 
+          && data.get('class', '') is string 
+          && data.school_id is string;
+    }
+
+    function isValidAttendance(data) {
+      return data.student_id is string && data.date is string 
+          && data.status in ['present', 'absent']
+          && data.school_id is string;
+    }
+
+    function isValidHomework(data) {
+      return data.title is string && data.title.size() <= 200
+          && data.subject is string
+          && data.school_id is string;
+    }
+
+    function isValidHomeworkSubmission(data) {
+      return data.homework_id is string 
+          && data.student_id is string 
+          && data.student_name is string 
+          && data.school_id is string
+          && (data.get('content', '') is string);
+    }
+
+    function isValidLeave(data) {
+      return data.student_id is string && data.reason is string
+          && data.status in ['pending', 'approved', 'rejected']
+          && data.school_id is string;
+    }
+
+    function isValidCall(data) {
+      return data.student_id is string 
+          && data.parent_phone is string 
+          && data.status in ['answered', 'missed', 'failed']
+          && data.school_id is string;
+    }
+
+    function isValidCallQueue(data) {
+      return data.student_id is string 
+          && data.parent_phone is string 
+          && data.status in ['pending', 'processing', 'completed', 'failed']
+          && data.school_id is string;
+    }
+
+    function isValidFeeStructure(data) {
+      return data.class_name is string && data.class_key is string 
+          && data.monthly_fee is number && data.school_id is string;
+    }
+
+    function isValidDueRecord(data) {
+      return data.student_id is string && data.month is string 
+          && data.amount is number && data.status in ["Paid", "Due", "Overdue", "Partially Paid", "Prepaid"]
+          && data.school_id is string;
+    }
+
+    function isValidFeeTransaction(data) {
+      return data.student_id is string && data.amount is number 
+          && data.payment_date is string && data.method in ["cash", "upi", "bank", "card"]
+          && data.school_id is string;
+    }
+
+    function isValidReceipt(data) {
+      return data.receipt_no is string && data.student_id is string 
+          && data.transaction_id is string && data.amount is number 
+          && data.school_id is string;
+    }
+
+    // --- Collection Routes ---
+
+    // Users Collection
+    match /users/{userId} {
+      // Allow users to read their own profile
+      allow get: if request.auth != null && (request.auth.uid == userId || isSuperAdmin());
+      
+      // Allow other admins to read profiles
+      allow get: if request.auth != null && 
+                  (getProfile() != null && getProfile().role in ['admin', 'school_admin', 'super_admin']);
+
+      // Allow any signed-in user to list (needed for teacher/parent login lookup)
+      allow list: if request.auth != null; 
+      
+      // Allow users to create their own profile
+      allow create: if request.auth != null && (
+        request.auth.uid == userId || 
+        isSuperAdmin()
+      );
+      
+      // Allow users to update their own profile (except sensitive fields) or admins to update
+      allow update: if request.auth != null && (
+        isSuperAdmin() || 
+        (request.auth.uid == userId && !incoming().diff(existing()).affectedKeys().hasAny(['role', 'school_id'])) ||
+        (getProfile() != null && getProfile().role in ['admin', 'school_admin', 'super_admin'])
+      );
+      
+      allow delete: if isSignedIn() && (
+        isSuperAdmin() || 
+        (isAdmin(getProfile()) && getProfile().school_id == resource.data.school_id)
+      );
+    }
+
+    // Collection Group students
+    match /{path=**}/students/{studentId} {
+      allow read: if isSignedIn();
+    }
+
+    // Schools Scoped Collections
+    match /schools/{schoolId} {
+      allow read: if isSignedIn() && isSuperAdminEmail();
+      
+      match /students/{studentId} {
+        allow read: if isSystemUser(); 
+        allow create: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile())) && isValidStudent(incoming());
+        allow update: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile()) || isParent(getProfile())) && isValidStudent(incoming());
+        allow delete: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+      }
+
+      match /attendance/{attendanceId} {
+        allow read: if isSystemUser();
+        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile())) && isValidAttendance(incoming());
+      }
+
+      match /fees/{feeId} {
+        allow read: if isSystemUser();
+        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile()));
+      }
+
+      match /payments/{paymentId} {
+        allow read: if isSystemUser();
+        allow create: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile()));
+      }
+
+      match /announcements/{announcementId} {
+        allow read: if isSystemUser();
+        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile()));
+      }
+
+      // --- Fee Management Collections ---
+      match /fee_structures/{structureId} {
+        allow read: if isSystemUser();
+        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile())) && isValidFeeStructure(incoming());
+      }
+
+      match /due_records/{dueId} {
+        allow read: if isSystemUser();
+        allow create, update: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile())) && isValidDueRecord(incoming());
+        allow delete: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+      }
+
+      match /fee_transactions/{txId} {
+        allow read: if isSystemUser();
+        allow create: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile())) && isValidFeeTransaction(incoming());
+        allow update: if false;
+        allow delete: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+      }
+
+      match /receipts/{receiptId} {
+        allow read: if isSystemUser();
+        allow create: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile())) && isValidReceipt(incoming());
+        allow update: if false;
+        allow delete: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+      }
+
+      // New collections for accurate tracking
+      match /payment_history/{id} {
+        allow read: if isSystemUser();
+        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+      }
+
+      match /partial_payments/{id} {
+        allow read: if isSystemUser();
+        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+      }
+
+      match /prepaid_balances/{id} {
+        allow read: if isSystemUser();
+        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+      }
+
+      match /homework/{homeworkId} {
+        allow read: if isSystemUser();
+        allow create, update: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile())) && isValidHomework(incoming());
+        allow delete: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile()));
+
+        match /views/{viewId} {
+          allow read: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile()));
+          allow create, update: if isSystemUser() && viewId == request.auth.uid;
+        }
+      }
+
+      match /homework_submissions/{submissionId} {
+        allow read: if request.auth != null && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile()) || resource.data.student_id == request.auth.uid);
+        allow create: if request.auth != null && incoming().student_id == request.auth.uid && isValidHomeworkSubmission(incoming());
+      }
+
+      match /leaves/{leaveId} {
+        allow read: if isSystemUser();
+        allow create: if isSystemUser() && isValidLeave(incoming());
+        allow update: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile())) && isValidLeave(incoming());
+      }
+
+      match /gallery/{imageId} {
+        allow read: if true;
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
+      }
+
+      match /timetables/{timetableId} {
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
+      }
+
+      match /parents/{parentId} {
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isTeacher(getProfile()));
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
+      }
+
+      match /calls/{callId} {
+        allow read: if isSignedIn() && (isSuperAdminEmail() || belongsToSchool(getProfile(), schoolId));
+        allow write: if false; // System only
+      }
+
+      match /call_queue/{queueId} {
+        allow read: if isSignedIn() && (isSuperAdminEmail() || belongsToSchool(getProfile(), schoolId));
+        allow write: if false; // System only
+      }
+
+      match /whatsapp_logs/{logId} {
+        allow read: if isSignedIn() && (isSuperAdminEmail() || belongsToSchool(getProfile(), schoolId));
+        allow write: if false; // System only
+      }
+
+      // --- Student ID Settings & Counters ---
+      match /settings/student_id {
+        allow read: if isSystemUser();
+        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+      }
+
+      match /system_counters/{counterId} {
+        allow read: if isSystemUser();
+        allow write: if isSystemUser() && (
+          isSuperAdmin() || 
+          isAdmin(getProfile()) || 
+          isTeacher(getProfile()) || 
+          isAccountant(getProfile())
+        );
+      }
+    }
+
+  }
+}
+

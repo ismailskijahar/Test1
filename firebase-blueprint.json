@@ -1,0 +1,352 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Base user profile for and role management",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "school_admin", "accountant", "teacher", "parent"] },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "school_id": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "name"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student record with academic and parental details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "roll_no": { "type": "string" },
+        "class": { "type": "string" },
+        "section": { "type": "string" },
+        "dob": { "type": "string" },
+        "father_name": { "type": "string" },
+        "mother_name": { "type": "string" },
+        "address": { "type": "string" },
+        "father_phone": { "type": "string" },
+        "mother_phone": { "type": "string" },
+        "admission_fee": { "type": "number" },
+        "monthly_fee": { "type": "number" },
+        "school_id": { "type": "string" },
+        "parent_id": { "type": "string" },
+        "fee_structure_id": { "type": "string" },
+        "is_dropout": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "roll_no", "class", "section", "school_id"]
+    },
+    "Parent": {
+      "title": "Parent",
+      "description": "Parent profile linked to students",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "linked_student_ids": { "type": "array", "items": { "type": "string" } },
+        "school_id": { "type": "string" }
+      },
+      "required": ["uid", "name", "school_id"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Daily attendance record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["present", "absent"] },
+        "marked_by": { "type": "string" },
+        "school_id": { "type": "string" }
+      },
+      "required": ["student_id", "date", "status", "school_id"]
+    },
+    "Fee": {
+      "title": "Fee",
+      "description": "Fee definition for a class or student",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "due_date": { "type": "string", "format": "date" },
+        "class": { "type": "string" },
+        "school_id": { "type": "string" }
+      },
+      "required": ["title", "amount", "school_id"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Manual payment record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "fee_id": { "type": "string" },
+        "amount_paid": { "type": "number" },
+        "payment_date": { "type": "string", "format": "date-time" },
+        "method": { "type": "string", "enum": ["cash", "upi", "bank"] },
+        "recorded_by": { "type": "string" },
+        "school_id": { "type": "string" }
+      },
+      "required": ["student_id", "amount_paid", "payment_date", "method", "school_id"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "School updates and news",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "image_url": { "type": "string" },
+        "school_id": { "type": "string" },
+        "target_roles": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["title", "description", "date", "school_id"]
+    },
+    "Call": {
+      "title": "Call",
+      "description": "Record of an automated AI call",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "student_name": { "type": "string" },
+        "parent_phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["answered", "missed", "failed"] },
+        "duration": { "type": "number" },
+        "recording_url": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "school_id": { "type": "string" }
+      },
+      "required": ["student_id", "parent_phone", "status", "timestamp", "school_id"]
+    },
+    "CallQueue": {
+      "title": "CallQueue",
+      "description": "Pending automated calls",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "student_name": { "type": "string" },
+        "parent_phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "processing", "completed", "failed"] },
+        "retries": { "type": "number" },
+        "error": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "school_id": { "type": "string" }
+      },
+      "required": ["student_id", "parent_phone", "status", "createdAt", "school_id"]
+    },
+    "WhatsAppLog": {
+      "title": "WhatsAppLog",
+      "description": "Log of sent WhatsApp messages",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "student_name": { "type": "string" },
+        "parent_phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["sent", "delivered", "read", "failed"] },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["text", "template"] },
+        "sent_at": { "type": "string", "format": "date-time" },
+        "school_id": { "type": "string" }
+      },
+      "required": ["student_id", "parent_phone", "status", "sent_at", "school_id"]
+    },
+    "WhatsAppConversation": {
+      "title": "WhatsAppConversation",
+      "description": "Active WhatsApp chat session with a parent",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "parent_phone": { "type": "string" },
+        "parent_name": { "type": "string" },
+        "last_message": { "type": "string" },
+        "last_message_at": { "type": "string", "format": "date-time" },
+        "unread_count": { "type": "number" },
+        "student_id": { "type": "string" },
+        "school_id": { "type": "string" },
+        "mode": { "type": "string", "enum": ["agent", "human"] }
+      },
+      "required": ["parent_phone", "last_message_at", "school_id"]
+    },
+    "WhatsAppMessage": {
+      "title": "WhatsAppMessage",
+      "description": "Individual message within a conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "conversation_id": { "type": "string" },
+        "direction": { "type": "string", "enum": ["inbound", "outbound"] },
+        "body": { "type": "string" },
+        "type": { "type": "string", "enum": ["text", "template", "image", "document"] },
+        "status": { "type": "string", "enum": ["sent", "delivered", "read", "failed"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "sender_id": { "type": "string" },
+        "school_id": { "type": "string" }
+      },
+      "required": ["conversation_id", "direction", "body", "timestamp", "school_id"]
+    },
+    "FeeStructure": {
+      "title": "FeeStructure",
+      "description": "Fee structure for a class",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "class_name": { "type": "string" },
+        "class_key": { "type": "string" },
+        "admission_fee": { "type": "number" },
+        "monthly_fee": { "type": "number" },
+        "transport_fee": { "type": "number" },
+        "exam_fee": { "type": "number" },
+        "school_id": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["class_name", "class_key", "monthly_fee", "school_id"]
+    },
+    "DueRecord": {
+      "title": "DueRecord",
+      "description": "Monthly fee due record for a student",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "month": { "type": "string" },
+        "amount": { "type": "number" },
+        "paid_amount": { "type": "number" },
+        "remaining_amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["Paid", "Due", "Overdue", "Partially Paid", "Prepaid"] },
+        "school_id": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["student_id", "month", "amount", "status", "school_id"]
+    },
+    "FeeTransaction": {
+      "title": "FeeTransaction",
+      "description": "Fee payment transaction log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "payment_date": { "type": "string", "format": "date-time" },
+        "method": { "type": "string", "enum": ["cash", "upi", "bank", "card"] },
+        "months": { "type": "array", "items": { "type": "string" } },
+        "recorded_by": { "type": "string" },
+        "school_id": { "type": "string" },
+        "receipt_id": { "type": "string" }
+      },
+      "required": ["student_id", "amount", "payment_date", "method", "school_id"]
+    },
+    "Receipt": {
+      "title": "Receipt",
+      "description": "Professional fee receipt",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "receipt_no": { "type": "string" },
+        "student_id": { "type": "string" },
+        "transaction_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "months_paid": { "type": "array", "items": { "type": "string" } },
+        "balance_due": { "type": "number" },
+        "school_id": { "type": "string" }
+      },
+      "required": ["receipt_no", "student_id", "transaction_id", "amount", "school_id"]
+    },
+    "Homework": {
+      "title": "Homework",
+      "description": "Homework assignment posted by teacher",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "subject": { "type": "string" },
+        "class": { "type": "string" },
+        "section": { "type": "string" },
+        "due_date": { "type": "string" },
+        "attachments": { "type": "array", "items": { "type": "string" } },
+        "teacher_id": { "type": "string" },
+        "school_id": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "description", "subject", "class", "section", "school_id", "teacher_id"]
+    },
+    "HomeworkSubmission": {
+      "title": "HomeworkSubmission",
+      "description": "Student submission for a homework assignment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "homework_id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "student_name": { "type": "string" },
+        "content": { "type": "string" },
+        "attachments": { "type": "array", "items": { "type": "string" } },
+        "school_id": { "type": "string" },
+        "submittedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["homework_id", "student_id", "student_name", "content", "school_id"]
+    },
+    "StudentIdSettings": {
+      "title": "StudentIdSettings",
+      "description": "Configuration for automatic student ID generation",
+      "type": "object",
+      "properties": {
+        "format": { "type": "string" },
+        "prefix": { "type": "string" },
+        "yearFormat": { "type": "string", "enum": ["YYYY", "YY"] },
+        "serialLength": { "type": "number" },
+        "useClassBasedSerial": { "type": "boolean" },
+        "useSectionBasedSerial": { "type": "boolean" },
+        "school_id": { "type": "string" }
+      },
+      "required": ["format", "prefix", "yearFormat", "serialLength", "school_id"]
+    },
+    "SystemCounter": {
+      "title": "SystemCounter",
+      "description": "Atomic counters for various system needs (e.g. ID generation)",
+      "type": "object",
+      "properties": {
+        "value": { "type": "number" }
+      },
+      "required": ["value"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "Global user profiles" },
+    "/schools/{schoolId}/students/{studentId}": { "schema": "Student", "description": "Students within a school" },
+    "/schools/{schoolId}/parents/{parentId}": { "schema": "Parent", "description": "Parents within a school" },
+    "/schools/{schoolId}/attendance/{attendanceId}": { "schema": "Attendance", "description": "Attendance records" },
+    "/schools/{schoolId}/fees/{feeId}": { "schema": "Fee", "description": "Fee definitions" },
+    "/schools/{schoolId}/payments/{paymentId}": { "schema": "Payment", "description": "Payment records" },
+    "/schools/{schoolId}/announcements/{announcementId}": { "schema": "Announcement", "description": "School announcements" },
+    "/schools/{schoolId}/calls/{callId}": { "schema": "Call", "description": "Completed call logs" },
+    "/schools/{schoolId}/call_queue/{queueId}": { "schema": "CallQueue", "description": "Active call processing queue" },
+    "/schools/{schoolId}/whatsapp_logs/{logId}": { "schema": "WhatsAppLog", "description": "WhatsApp notification logs" },
+    "/schools/{schoolId}/whatsapp_conversations/{conversationId}": { "schema": "WhatsAppConversation", "description": "Real-time WhatsApp conversations" },
+    "/schools/{schoolId}/whatsapp_conversations/{conversationId}/messages/{messageId}": { "schema": "WhatsAppMessage", "description": "Messages within a conversation" },
+    "/schools/{schoolId}/fee_structures/{structureId}": { "schema": "FeeStructure", "description": "Class-wise fee configurations" },
+    "/schools/{schoolId}/due_records/{dueId}": { "schema": "DueRecord", "description": "Student monthly dues" },
+    "/schools/{schoolId}/fee_transactions/{txId}": { "schema": "FeeTransaction", "description": "Financial transaction history" },
+    "/schools/${schoolId}/receipts/{receiptId}": { "schema": "Receipt", "description": "Fee payment receipts" },
+    "/schools/{schoolId}/homework/{homeworkId}": { "schema": "Homework", "description": "Homework assignments" },
+    "/schools/{schoolId}/homework_submissions/{submissionId}": { "schema": "HomeworkSubmission", "description": "Student homework submissions" },
+    "/schools/{schoolId}/settings/student_id": { "schema": "StudentIdSettings", "description": "Student ID generation configuration" },
+    "/schools/{schoolId}/system_counters/{counterId}": { "schema": "SystemCounter", "description": "Generic atomic counters" }
+  }
+}

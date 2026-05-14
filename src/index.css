@@ -1,0 +1,190 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-brand-coral: #EB9B7F;
+  --color-brand-indigo: #4B5282;
+  --color-brand-bg: #F8F9FA;
+  --color-brand-surface: #FFFFFF;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-slate-900 antialiased dark:bg-[#121212] dark:text-white transition-colors duration-300;
+  }
+}
+
+.bento-card {
+  @apply bg-white dark:bg-[#1E1E1E] rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all duration-300 hover:shadow-md dark:shadow-none;
+}
+
+.sidebar-icon {
+  @apply h-5 w-5 transition-colors duration-200;
+}
+
+/* Custom Scrollbar for a premium feel */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}
+
+/* Print Styles */
+@media print {
+  /* Hide all non-printable UI elements */
+  nav, aside, button, footer, header, .sidebar, .navbar, .mobile-nav, [role="navigation"], [role="banner"], .modal-backdrop, .fixed:not(.print-visible) {
+    display: none !important;
+  }
+
+  /* Reset layout constraints for printing */
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background-color: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Extremely aggressive hiding of EVERYTHING that is not the print layout */
+  .no-print,
+  [class*="no-print"],
+  nav, 
+  aside, 
+  header, 
+  footer, 
+  button,
+  .fixed:not(.print-visible),
+  .absolute:not(.print-visible):not([id="print-only-layout"] *):not(.print-only *) {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+
+  /* Unhide structural parents of the print layout */
+  #root, 
+  main {
+    display: block !important;
+    visibility: visible !important;
+    background: white !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  /* Reveal the printable section */
+  .print-only, #print-only-layout {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    background: white !important;
+    color: black !important;
+    z-index: 99999 !important;
+    padding-bottom: 30mm !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  /* Table styles following Google Sheets professional look */
+  .print-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 10pt !important;
+    table-layout: fixed !important;
+    border: 0.5pt solid black !important;
+  }
+
+  .print-table th, 
+  .print-table td {
+    border: 0.5pt solid black !important;
+    padding: 2pt 4pt !important;
+    text-align: left !important;
+    vertical-align: middle !important;
+    word-wrap: break-word !important;
+    font-size: 8pt !important;
+    color: black !important;
+    font-family: Arial, sans-serif !important;
+  }
+
+  .print-table th {
+    background-color: #f3f3f3 !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    font-size: 7pt !important;
+    text-align: center !important;
+  }
+
+  /* Header styles */
+  .print-header {
+    text-align: center !important;
+    margin-bottom: 5pt !important;
+    padding-bottom: 10pt !important;
+    border-bottom: 1pt solid black !important;
+  }
+
+  .print-header h1 {
+    font-size: 18pt !important;
+    margin: 0 !important;
+    font-weight: bold !important;
+    color: black !important;
+  }
+
+  .print-header p {
+    font-size: 9pt !important;
+    margin: 1pt 0 !important;
+    color: black !important;
+    font-weight: bold !important;
+  }
+
+  /* Footer styles */
+  .print-footer {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    background: white !important;
+    z-index: 100000 !important;
+    border-top: 1pt solid black !important;
+    padding-top: 5pt !important;
+    padding-bottom: 10mm !important;
+  }
+
+  /* Row control */
+  tr {
+    page-break-inside: avoid !important;
+  }
+}
+
+/* Hide print-only elements on screen */
+.print-only {
+  display: none;
+}
