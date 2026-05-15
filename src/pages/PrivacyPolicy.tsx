@@ -1,10 +1,14 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Shield, Mail, Lock, FileText, ChevronLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 export default function PrivacyPolicy() {
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    document.title = "AerovaX | Privacy Policy";
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
@@ -119,6 +123,7 @@ export default function PrivacyPolicy() {
                 </p>
                 <div className="space-y-1 pt-4 border-t border-white/10">
                   <p className="font-bold text-lg text-white m-0">Labbaik English School</p>
+                  <p className="text-slate-400 text-sm m-0 italic mb-2 font-mono">labbaikenglishschool8@gmail.com</p>
                   <p className="text-brand-cyan font-medium m-0 underline underline-offset-4">AerovaX School Management System</p>
                 </div>
               </section>
@@ -126,8 +131,11 @@ export default function PrivacyPolicy() {
           </div>
         </motion.div>
 
-        <footer className="mt-12 text-center text-slate-400 text-sm">
-          <p>© {new Date().getFullYear()} AerovaX School Management System. All rights reserved.</p>
+        <footer className="mt-12 flex flex-col md:flex-row items-center justify-center gap-6 text-slate-400 text-sm">
+          <Link to="/terms-of-service" className="hover:text-brand-indigo transition-colors font-medium">Terms of Service</Link>
+          <Link to="/data-deletion" className="hover:text-brand-indigo transition-colors font-medium">Data Deletion</Link>
+          <p className="hidden md:block text-slate-200">|</p>
+          <p>© {new Date().getFullYear()} AerovaX. All rights reserved.</p>
         </footer>
       </main>
     </div>

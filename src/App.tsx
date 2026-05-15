@@ -22,6 +22,8 @@ import WhatsAppCenter from './pages/WhatsAppCenter';
 import ParentPortal from './pages/ParentPortal';
 import TeacherPortal from './pages/TeacherPortal';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
+import DataDeletion from './pages/DataDeletion';
 
 import Settings from './pages/Settings';
 
@@ -63,6 +65,12 @@ function AppContent() {
   // Handle public routes before auth check
   if (location.pathname === '/privacy-policy') {
     return <PrivacyPolicy />;
+  }
+  if (location.pathname === '/terms-of-service') {
+    return <TermsOfService />;
+  }
+  if (location.pathname === '/data-deletion') {
+    return <DataDeletion />;
   }
 
   if (!profile) {
