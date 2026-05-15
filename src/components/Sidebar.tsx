@@ -40,8 +40,8 @@ export default function Sidebar() {
     { icon: IndianRupee, label: t('fees'), path: '/fees' },
     { icon: BookOpen, label: t('class_menu'), path: '/class' },
     { icon: ClipboardList, label: t('exam'), path: '/exam' },
-    {icon: PhoneCall, label: t('ai_calls'), path: '/ai-calls' },
-    { icon: MessageSquare, label: 'WhatsApp Center', path: '/whatsapp-alerts' },
+    { icon: PhoneCall, label: t('ai_calls'), path: '/ai-calls' },
+    ...(profile.role !== 'teacher' ? [{ icon: MessageSquare, label: 'WhatsApp Center', path: '/whatsapp-center' }] : []),
     { icon: Bell, label: t('notice'), path: '/announcements' },
   ] : [
     { icon: GraduationCap, label: 'Portal', path: '/' },

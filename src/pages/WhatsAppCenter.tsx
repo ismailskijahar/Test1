@@ -25,6 +25,7 @@ import { format } from 'date-fns';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { whatsappService } from '../services/whatsappService';
+import axios from 'axios';
 
 export default function WhatsAppCenter() {
   const { profile } = useAuth();
@@ -76,8 +77,13 @@ export default function WhatsAppCenter() {
     setSending(true);
 
     try {
-      await whatsappService.sendTextMessage(profile.school_id, selectedConv.parent_phone, msgBody);
-      // The message will appear via onSnapshot from Firestore once the server saves it
+      // Use the general send route that handles text
+      await axios.post('/api/whatsapp/send', {
+        schoolId: profile.school_id,
+        to: selectedConv.parent_phone,
+        text: msgBody,
+        type: 'text'
+      });
     } catch (error: any) {
       console.error(error);
       const errorData = error.response?.data;
@@ -90,10 +96,14 @@ export default function WhatsAppCenter() {
 
   const toggleMode = async () => {
     if (!selectedConv || !profile) return;
-    const newMode = selectedConv.mode === 'agent' ? 'human' : 'agent';
+    const newMode = selectedConv.mode === 'ai' ? 'human' : 'ai';
     try {
-      await dataService.updateWhatsAppConversation(profile.school_id, selectedConv.id, { mode: newMode as any });
-      setSelectedConv(prev => prev ? { ...prev, mode: newMode as any } : null);
+      await axios.patch('/api/whatsapp/mode', {
+        schoolId: profile.school_id,
+        conversationId: selectedConv.id,
+        mode: newMode
+      });
+      setSelectedConv(prev => prev ? { ...prev, mode: newMode } : null);
     } catch (error) {
       console.error(error);
     }
@@ -201,18 +211,18 @@ export default function WhatsAppCenter() {
                           onClick={toggleMode}
                           className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                         >
-                          <div className={cn("h-1.5 w-1.5 rounded-full", selectedConv.mode === 'agent' ? "bg-emerald-500" : "bg-brand-indigo")} />
+                          <div className={cn("h-1.5 w-1.5 rounded-full", selectedConv.mode === 'ai' ? "bg-emerald-500" : "bg-brand-indigo")} />
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {selectedConv.mode === 'agent' ? 'AI Agent Mode' : 'Human Mode'}
+                            {selectedConv.mode === 'ai' ? 'AI Agent Mode' : 'Human Mode'}
                           </span>
                         </button>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                        <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl mr-4">
-                          {selectedConv.mode === 'agent' ? <Bot className="h-4 w-4 text-emerald-600" /> : <User className="h-4 w-4 text-brand-indigo" />}
+                          {selectedConv.mode === 'ai' ? <Bot className="h-4 w-4 text-emerald-600" /> : <User className="h-4 w-4 text-brand-indigo" />}
                           <span className="text-[10px] font-bold text-slate-600 uppercase">
-                            {selectedConv.mode === 'agent' ? 'AI Responding' : 'Manual Control'}
+                            {selectedConv.mode === 'ai' ? 'AI Responding' : 'Manual Control'}
                           </span>
                        </div>
                       <button className="p-3 text-slate-400 hover:text-brand-indigo rounded-xl transition-colors">
@@ -221,43 +231,48 @@ export default function WhatsAppCenter() {
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-8 space-y-6" ref={scrollRef}>
-                    {messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={cn(
-                          "flex",
-                          msg.direction === 'outbound' ? "justify-end" : "justify-start"
-                        )}
-                      >
-                        <div className={cn(
-                          "max-w-[70%] p-4 rounded-3xl text-sm shadow-sm",
-                          msg.direction === 'outbound' 
-                            ? "bg-[#2B2D42] text-white rounded-tr-none" 
-                            : "bg-slate-100 text-[#2B2D42] rounded-tl-none border border-slate-200"
-                        )}>
-                          <p className="leading-relaxed">{msg.body}</p>
+                    <div className="flex-1 overflow-y-auto p-8 space-y-6" ref={scrollRef}>
+                      {messages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={cn(
+                            "flex",
+                            msg.direction === 'outbound' ? "justify-end" : "justify-start"
+                          )}
+                        >
                           <div className={cn(
-                            "flex items-center gap-1 mt-2",
-                            msg.direction === 'outbound' ? "justify-end text-white/50" : "text-slate-400"
+                            "max-w-[70%] p-4 rounded-3xl text-sm shadow-sm",
+                            msg.direction === 'outbound' 
+                              ? "bg-[#2B2D42] text-white rounded-tr-none" 
+                              : "bg-slate-100 text-[#2B2D42] rounded-tl-none border border-slate-200"
                           )}>
-                            <span className="text-[10px] font-bold uppercase tracking-tighter">
-                              {msg.timestamp ? format(new Date(msg.timestamp), 'HH:mm') : ''}
-                            </span>
-                            {msg.direction === 'outbound' && (
-                              <span className="ml-1">
-                                {msg.status === 'read' ? <CheckCheck className="h-3 w-3 text-brand-indigo" /> : 
-                                 msg.status === 'delivered' ? <CheckCheck className="h-3 w-3" /> :
-                                 msg.status === 'sent' ? <Check className="h-3 w-3" /> :
-                                 msg.status === 'failed' ? <AlertCircle className="h-3 w-3 text-red-500" /> :
-                                 <Clock className="h-3 w-3" />}
+                            <p className="leading-relaxed">{msg.message_text}</p>
+                            <div className={cn(
+                              "flex items-center gap-1 mt-2",
+                              msg.direction === 'outbound' ? "justify-end text-white/50" : "text-slate-400"
+                            )}>
+                              <span className="text-[10px] font-bold uppercase tracking-tighter">
+                                {msg.created_at ? format(new Date(msg.created_at.toDate ? msg.created_at.toDate() : msg.created_at), 'HH:mm') : ''}
                               </span>
-                            )}
+                              {msg.direction === 'outbound' && (
+                                <span className="ml-1 text-[8px] font-bold uppercase mr-1">
+                                  {msg.sender_type}
+                                </span>
+                              )}
+                              {msg.direction === 'outbound' && (
+                                <span className="ml-1">
+                                  {msg.status === 'read' ? <CheckCheck className="h-3 w-3 text-brand-indigo" /> : 
+                                   msg.status === 'delivered' ? <CheckCheck className="h-3 w-3" /> :
+                                   msg.status === 'sent' ? <Check className="h-3 w-3" /> :
+                                   msg.status === 'failed' ? <AlertCircle className="h-3 w-3 text-red-500" /> :
+                                   <Clock className="h-3 w-3" />}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
 
                   <form onSubmit={handleSendMessage} className="p-6 border-t border-slate-50 bg-slate-50/30 flex items-center gap-4">
                     <button type="button" className="p-3 text-slate-400 hover:text-brand-indigo rounded-xl bg-white border border-slate-100 shadow-sm transition-all active:scale-95">
@@ -265,7 +280,7 @@ export default function WhatsAppCenter() {
                     </button>
                     <input
                       type="text"
-                      placeholder={selectedConv.mode === 'agent' ? "AI is handling this chat..." : "Type a message..."}
+                      placeholder={selectedConv.mode === 'ai' ? "AI is handling this chat..." : "Type a message..."}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       disabled={sending}

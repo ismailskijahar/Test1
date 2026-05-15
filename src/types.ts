@@ -296,29 +296,45 @@ export interface WhatsAppLog {
 }
 
 export interface WhatsAppConversation {
-  id: string;
+  id: string; // parent_phone
+  conversation_id: string; // same as parent_phone
   parent_phone: string;
-  parent_name?: string;
+  parent_name: string;
+  linked_student_id: string;
+  linked_student_name: string;
+  mode: 'ai' | 'human';
   last_message: string;
-  last_message_at: string;
+  last_message_at: any; // FieldValue or string
   unread_count: number;
-  student_id?: string;
   school_id: string;
-  mode: 'agent' | 'human';
+  created_at: any;
+  updated_at: any;
 }
 
 export interface WhatsAppMessage {
   id: string;
-  whatsapp_message_id?: string;
   conversation_id: string;
+  whatsapp_message_id: string;
+  sender_type: 'parent' | 'admin' | 'ai' | 'system';
   direction: 'inbound' | 'outbound';
-  body: string;
-  type: 'text' | 'template' | 'image' | 'document';
+  message_text: string;
+  message_type: 'text' | 'template' | 'image' | 'document';
+  media_url?: string;
   status: 'sent' | 'delivered' | 'read' | 'failed';
-  timestamp: string;
-  sender_id?: string;
-  sender_type?: 'parent' | 'ai' | 'human' | 'system';
+  created_at: any;
+  sent_at?: any;
+  delivered_at?: any;
+  read_at?: any;
   school_id: string;
+}
+
+export interface WhatsAppAiSettings {
+  school_id: string;
+  is_enabled: boolean;
+  prompt_template: string;
+  welcome_message: string;
+  fall_back_message: string;
+  updated_at: any;
 }
 
 export enum OperationType {

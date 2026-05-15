@@ -119,7 +119,7 @@ function AppContent() {
                   <Route path="reports" element={<Reports />} />
                 </Route>
                 <Route path="/ai-calls" element={<AICalls />} />
-                <Route path="/whatsapp-alerts" element={<WhatsAppCenter />} />
+                {profile.role !== 'teacher' && <Route path="/whatsapp-center" element={<WhatsAppCenter />} />}
                 <Route path="/announcements" element={<Announcements />} />
                 <Route path="/settings" element={<Settings />} />
               </>

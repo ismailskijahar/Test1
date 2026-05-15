@@ -38,7 +38,8 @@ import {
   StudentIdSettings,
   WhatsAppLog,
   WhatsAppConversation,
-  WhatsAppMessage
+  WhatsAppMessage,
+  WhatsAppAiSettings
 } from '../types';
 import { auth } from '../lib/firebase';
 
@@ -851,7 +852,7 @@ export const dataService = {
   },
 
   getWhatsAppLogs: async (schoolId: string) => {
-    const path = `schools/${schoolId}/whatsapp_logs`;
+    const path = `schools/${schoolId}/whatsapp_delivery_logs`;
     try {
       const q = query(collection(db, path), orderBy('sent_at', 'desc'), limit(50));
       const snapshot = await getDocs(q);
@@ -862,26 +863,38 @@ export const dataService = {
     }
   },
 
-  getWhatsAppStats: async (schoolId: string) => {
-    const path = `schools/${schoolId}/whatsapp_logs`;
+  getWhatsAppAiSettings: async (schoolId: string) => {
+    const path = `schools/${schoolId}/settings/whatsapp_ai_settings`;
     try {
-      const snapshot = await getDocs(collection(db, path));
-      const logs = snapshot.docs.map(doc => doc.data());
-      
-      const today = new Date().toISOString().split('T')[0];
-      const todayLogs = logs.filter(l => {
-        const timestamp = l.sent_at?.toDate ? l.sent_at.toDate() : new Date(l.sent_at);
-        return timestamp.toISOString().startsWith(today);
-      });
-      
-      return {
-        totalToday: todayLogs.length,
-        delivered: todayLogs.filter(l => l.status === 'sent' || l.status === 'delivered').length,
-        failed: todayLogs.filter(l => l.status === 'failed').length
-      };
+      const snap = await getDoc(doc(db, `schools/${schoolId}/settings`, 'whatsapp_ai_settings'));
+      if (!snap.exists()) {
+        return {
+          school_id: schoolId,
+          is_enabled: true,
+          prompt_template: "You are a specialized AI Assistant for AerovaX School. Answer questions about timings, fees, and school events.",
+          welcome_message: "Hello! Testing AerovaX WhatsApp Assistant.",
+          fall_back_message: "Please contact the school office for confirmation.",
+          updated_at: new Date().toISOString()
+        } as WhatsAppAiSettings;
+      }
+      return snap.data() as WhatsAppAiSettings;
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      return { totalToday: 0, delivered: 0, failed: 0 };
+      handleFirestoreError(error, OperationType.GET, path);
+      return null;
+    }
+  },
+
+  updateWhatsAppAiSettings: async (schoolId: string, data: Partial<WhatsAppAiSettings>) => {
+    const path = `schools/${schoolId}/settings/whatsapp_ai_settings`;
+    try {
+      await setDoc(doc(db, `schools/${schoolId}/settings`, 'whatsapp_ai_settings'), {
+        ...data,
+        updated_at: serverTimestamp()
+      }, { merge: true });
+      return true;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+      return false;
     }
   },
 
@@ -1126,7 +1139,7 @@ export const dataService = {
   },
 
   addWhatsAppLog: async (schoolId: string, log: Omit<WhatsAppLog, 'id'>) => {
-    const path = `schools/${schoolId}/whatsapp_logs`;
+    const path = `schools/${schoolId}/whatsapp_delivery_logs`;
     try {
       return await addDoc(collection(db, path), log);
     } catch (error) {
@@ -1147,7 +1160,7 @@ export const dataService = {
 
   getWhatsAppMessages: (schoolId: string, conversationId: string, callback: (messages: WhatsAppMessage[]) => void) => {
     const path = `schools/${schoolId}/whatsapp_conversations/${conversationId}/messages`;
-    const q = query(collection(db, path), orderBy('timestamp', 'asc'));
+    const q = query(collection(db, path), orderBy('created_at', 'asc'));
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as WhatsAppMessage[]);
     }, (error) => {
