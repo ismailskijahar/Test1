@@ -78,9 +78,11 @@ export default function WhatsAppCenter() {
     try {
       await whatsappService.sendTextMessage(profile.school_id, selectedConv.parent_phone, msgBody);
       // The message will appear via onSnapshot from Firestore once the server saves it
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Failed to send message. Check console for details.");
+      const errorData = error.response?.data;
+      const errorMessage = errorData?.error?.message || errorData?.details || errorData?.error || error.message;
+      alert(`Failed to send message: ${errorMessage}`);
     } finally {
       setSending(false);
     }

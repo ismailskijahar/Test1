@@ -309,6 +309,7 @@ export interface WhatsAppConversation {
 
 export interface WhatsAppMessage {
   id: string;
+  whatsapp_message_id?: string;
   conversation_id: string;
   direction: 'inbound' | 'outbound';
   body: string;
@@ -316,6 +317,7 @@ export interface WhatsAppMessage {
   status: 'sent' | 'delivered' | 'read' | 'failed';
   timestamp: string;
   sender_id?: string;
+  sender_type?: 'parent' | 'ai' | 'human' | 'system';
   school_id: string;
 }
 

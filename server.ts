@@ -340,13 +340,33 @@ app.post("/api/whatsapp/send_text", async (req, res) => {
   const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const targetSchoolId = schoolId || "default";
 
+  // 1. Validate Env Variables
+  if (!ACCESS_TOKEN || !PHONE_NUMBER_ID) {
+    const missing = !ACCESS_TOKEN ? "WHATSAPP_ACCESS_TOKEN" : "WHATSAPP_PHONE_NUMBER_ID";
+    console.error(`FATAL: Missing ${missing} in environment.`);
+    return res.status(500).json({ 
+      error: "WhatsApp configuration missing on server.", 
+      details: `Missing ${missing}` 
+    });
+  }
+
+  // 2. Format Recipient Number (Meta requires digits only)
+  const formattedTo = to.replace(/\D/g, "");
+  
+  // 3. Debug Logging
+  console.log("--- SENDING WHATSAPP TEXT MESSAGE ---");
+  console.log("TO (Original):", to);
+  console.log("TO (Formatted):", formattedTo);
+  console.log("MESSAGE:", text);
+  console.log("PHONE NUMBER ID:", PHONE_NUMBER_ID);
+
   try {
     const response = await axios.post(
       `https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: "whatsapp",
         recipient_type: "individual",
-        to,
+        to: formattedTo,
         type: "text",
         text: { body: text },
       },
@@ -355,10 +375,12 @@ app.post("/api/whatsapp/send_text", async (req, res) => {
       }
     );
 
-    // Track in Firestore if sent successfully
+    console.log("META API SUCCESS:", response.data);
+
+    // 4. Track in Firestore ONLY if sent successfully
     if (response.data && response.data.messages) {
       const waMsgId = response.data.messages[0].id;
-      const convRef = db.collection(`schools/${targetSchoolId}/whatsapp_conversations`).doc(to);
+      const convRef = db.collection(`schools/${targetSchoolId}/whatsapp_conversations`).doc(formattedTo);
       
       await convRef.collection("messages").add({
         whatsapp_message_id: waMsgId,
@@ -374,15 +396,25 @@ app.post("/api/whatsapp/send_text", async (req, res) => {
       await convRef.set({
         last_message: text,
         last_message_at: FieldValue.serverTimestamp(),
-        parent_phone: to,
+        parent_phone: formattedTo,
         school_id: targetSchoolId
       }, { merge: true });
     }
 
     res.json(response.data);
   } catch (error: any) {
-    console.error("WhatsApp API Error:", error.response?.data || error.message);
-    res.status(error.response?.status || 500).json(error.response?.data || { error: error.message });
+    const metaError = error.response?.data || { error: error.message };
+    console.error("META API FAILURE:", JSON.stringify(metaError));
+    
+    // Check for common trial number errors
+    if (metaError.error?.code === 131030) {
+      return res.status(400).json({ 
+        error: "Recipient not verified.", 
+        details: "During trial mode, you can only send to verified numbers." 
+      });
+    }
+
+    res.status(error.response?.status || 500).json(metaError);
   }
 });
 
@@ -392,12 +424,31 @@ app.post("/api/whatsapp/send", async (req, res) => {
   const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const targetSchoolId = schoolId || "default";
 
+  // 1. Validate Env Variables
+  if (!ACCESS_TOKEN || !PHONE_NUMBER_ID) {
+    const missing = !ACCESS_TOKEN ? "WHATSAPP_ACCESS_TOKEN" : "WHATSAPP_PHONE_NUMBER_ID";
+    console.error(`FATAL: Missing ${missing} in environment.`);
+    return res.status(500).json({ 
+      error: "WhatsApp configuration missing on server.", 
+      details: `Missing ${missing}` 
+    });
+  }
+
+  // 2. Format Recipient Number
+  const formattedTo = to.replace(/\D/g, "");
+
+  // 3. Debug Logging
+  console.log("--- SENDING WHATSAPP TEMPLATE ---");
+  console.log("TO:", formattedTo);
+  console.log("TEMPLATE:", template);
+  console.log("PHONE NUMBER ID:", PHONE_NUMBER_ID);
+
   try {
     const response = await axios.post(
       `https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: "whatsapp",
-        to,
+        to: formattedTo,
         type: "template",
         template: {
           name: template,
@@ -410,10 +461,12 @@ app.post("/api/whatsapp/send", async (req, res) => {
       }
     );
 
-    // Track template message in Firestore too
+    console.log("META API SUCCESS (Template):", response.data);
+
+    // 4. Track template message in Firestore ONLY if successful
     if (response.data && response.data.messages) {
       const waMsgId = response.data.messages[0].id;
-      const convRef = db.collection(`schools/${targetSchoolId}/whatsapp_conversations`).doc(to);
+      const convRef = db.collection(`schools/${targetSchoolId}/whatsapp_conversations`).doc(formattedTo);
       
       await convRef.collection("messages").add({
         whatsapp_message_id: waMsgId,
@@ -429,15 +482,16 @@ app.post("/api/whatsapp/send", async (req, res) => {
       await convRef.set({
         last_message: `[Template: ${template}]`,
         last_message_at: FieldValue.serverTimestamp(),
-        parent_phone: to,
+        parent_phone: formattedTo,
         school_id: targetSchoolId
       }, { merge: true });
     }
 
     res.json(response.data);
   } catch (error: any) {
-    console.error("WhatsApp API Error:", error.response?.data || error.message);
-    res.status(error.response?.status || 500).json(error.response?.data || { error: error.message });
+    const metaError = error.response?.data || { error: error.message };
+    console.error("META API FAILURE (Template):", JSON.stringify(metaError));
+    res.status(error.response?.status || 500).json(metaError);
   }
 });
 
