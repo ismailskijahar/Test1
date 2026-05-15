@@ -101,30 +101,43 @@ app.get("/api/health", (req, res) => {
 const handleInboundWebhook = async (req: express.Request, res: express.Response) => {
   const body = req.body;
 
-  if (body.object) {
-    if (
-      body.entry &&
-      body.entry[0].changes &&
-      body.entry[0].changes[0] &&
-      body.entry[0].changes[0].value.messages &&
-      body.entry[0].changes[0].value.messages[0]
-    ) {
-      const message = body.entry[0].changes[0].value.messages[0];
-      const from = message.from; // parent phone
-      const msgId = message.id;
-      const msgBody = message.text ? message.text.body : "";
-      
-      console.log(`Received WhatsApp from ${from}: ${msgBody}`);
+  // 1. Return 200 fast to Meta to avoid retry loops
+  res.sendStatus(200);
 
-      try {
+  // 2. Process async to avoid blocking Meta
+  (async () => {
+    try {
+      console.log('--- WHATSAPP WEBHOOK POST RECEIVED ---');
+      
+      if (!body.object) return;
+
+      if (
+        body.entry &&
+        body.entry[0].changes &&
+        body.entry[0].changes[0] &&
+        body.entry[0].changes[0].value.messages &&
+        body.entry[0].changes[0].value.messages[0]
+      ) {
+        const message = body.entry[0].changes[0].value.messages[0];
+        const contact = body.entry[0].changes[0].value.contacts?.[0];
+        const from = message.from; // parent phone
+        const msgId = message.id;
+        const msgBody = message.text ? message.text.body : "";
+        const parentName = contact?.profile?.name || "Parent";
+        
+        console.log(`Incoming Message: From ${from} (${parentName}): "${msgBody}"`);
+
         // Find which school this parent belongs to
+        // We clean the phone number to match formatting
+        const cleanFrom = from.replace(/\D/g, "");
+        
         const studentsSnapshot = await db.collectionGroup("students")
-          .where("parent_phone", "==", from)
+          .where("parent_phone", "in", [from, cleanFrom])
           .limit(1)
           .get();
         
         let schoolId = "default";
-        let studentName = "Unknown Parent";
+        let studentName = parentName;
         let studentId = "unknown";
 
         if (!studentsSnapshot.empty) {
@@ -133,14 +146,16 @@ const handleInboundWebhook = async (req: express.Request, res: express.Response)
           studentName = studentData.name;
           studentId = studentDoc.id;
           
-          // Reconstruct schoolId from path: schools/{schoolId}/students/{studentId}
           const pathParts = studentDoc.ref.path.split("/");
           if (pathParts[0] === "schools") {
             schoolId = pathParts[1];
           }
+          console.log(`Matched Student: ${studentName} in School: ${schoolId}`);
+        } else {
+          console.warn(`No student found for phone ${from}. Using default school.`);
         }
 
-        // 1. Find or create conversation in school-scoped path
+        // 3. Find or create conversation
         const convRef = db.collection(`schools/${schoolId}/whatsapp_conversations`).doc(from);
         const convDoc = await convRef.get();
         
@@ -148,6 +163,7 @@ const handleInboundWebhook = async (req: express.Request, res: express.Response)
 
         if (!convDoc.exists) {
           conversationData = {
+            id: from,
             parent_phone: from,
             parent_name: studentName,
             student_id: studentId,
@@ -155,74 +171,91 @@ const handleInboundWebhook = async (req: express.Request, res: express.Response)
             last_message_at: FieldValue.serverTimestamp(),
             unread_count: 1,
             mode: "ai", 
-            school_id: schoolId
+            school_id: schoolId,
+            created_at: FieldValue.serverTimestamp()
           };
           await convRef.set(conversationData);
+          console.log(`Created new conversation for ${from}`);
         } else {
           await convRef.update({
             last_message: msgBody,
             last_message_at: FieldValue.serverTimestamp(),
-            unread_count: FieldValue.increment(1)
+            unread_count: FieldValue.increment(1),
+            school_id: schoolId // Ensure it's correct
           });
-          // Refresh conversationData for logic below
           conversationData = (await convRef.get()).data();
         }
 
-        // 2. Save Message
-        await convRef.collection("messages").add({
+        // 4. Save Message in subcollection
+        const msgRef = await convRef.collection("messages").add({
           conversation_id: from,
+          whatsapp_message_id: msgId,
           body: msgBody,
           timestamp: FieldValue.serverTimestamp(),
           type: "text",
           direction: "inbound",
+          sender_type: "parent",
           status: "delivered",
           school_id: schoolId
         });
+        console.log(`Saved message to Firestore: ${msgRef.id}`);
 
-        // 3. AI Agent Logic
+        // 5. AI Auto-Reply Logic
         if (conversationData?.mode === "ai" && OPENROUTER_API_KEY) {
-          const prompt = `You are an AI School Assistant for AerovaX School. 
-          A parent with phone ${from} asked: "${msgBody}".
-          The student name is ${studentName}.
+          console.log(`AI mode active. Generating reply via OpenRouter...`);
+          const prompt = `You are a specialized AI Assistant for AerovaX School and its management software. 
           
-          If they ask about attendance, fee, or homework, tell them you'll fetch it or direct them to the portal.
-          Keep answers short, professional, and helpful. Use English and Bengali where appropriate.
+          STRICT LIMITATION: You MUST only answer questions related to AerovaX School (timings, location, fees, attendance, homework, events) or the AerovaX School Management Software.
           
-          AerovaX School Info:
+          If the user asks about anything else (general knowledge, coding, unrelated advice, other schools, etc.), you must politely inform them that you are only programmed to assist with AerovaX School and its software.
+          
+          Current Inquiry: "${msgBody}"
+          Student Name: ${studentName}
+          Parent Phone: ${from}
+          
+          AerovaX School Details:
           - Timings: 8:00 AM to 2:00 PM
           - Location: Education Valley
+          - Website: aerovax.edu
           
-          Current Request: ${msgBody}`;
+          Response Guidelines:
+          - Keep it short, professional, and helpful.
+          - Use English and Bengali where appropriate.
+          - If they ask for specific private data (like exact fees), tell them to log into the portal.`;
 
           try {
-            const response = await axios.post(
+            const aiResponseRaw = await axios.post(
               "https://openrouter.ai/api/v1/chat/completions",
               {
                 model: DEFAULT_AI_MODEL,
                 messages: [
-                  { role: "system", content: "You are a helpful school assistant for AerovaX School." },
+                  { 
+                    role: "system", 
+                    content: "You are a specialized school assistant. You ONLY talk about AerovaX School and its software. You decline all other topics politely." 
+                  },
                   { role: "user", content: prompt }
                 ],
               },
               {
                 headers: {
                   Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-                  "HTTP-Referer": "https://aerovax.edu", // Optional: your site URL
-                  "X-Title": "AerovaX WhatsApp Assistant", // Optional: your site name
+                  "HTTP-Referer": "https://aerovax.edu",
+                  "X-Title": "AerovaX WhatsApp Assistant",
                   "Content-Type": "application/json"
                 }
               }
             );
 
-            const aiResponse = response.data.choices[0].message.content;
+            const aiResponse = aiResponseRaw.data.choices[0].message.content;
+            console.log(`AI Reply Generated: ${aiResponse.substring(0, 50)}...`);
 
-            // Send WhatsApp reply
+            // 6. Send WhatsApp reply via Meta Graph API v25.0 (as requested in Step 7)
             const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
             const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
             if (ACCESS_TOKEN && PHONE_NUMBER_ID) {
-              await axios.post(
-                `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`,
+              const replyRes = await axios.post(
+                `https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
                 {
                   messaging_product: "whatsapp",
                   to: from,
@@ -231,50 +264,68 @@ const handleInboundWebhook = async (req: express.Request, res: express.Response)
                 },
                 { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } }
               );
+              
+              const waReplyId = replyRes.data.messages[0].id;
+              console.log(`AI Reply sent to WhatsApp: ${waReplyId}`);
 
-              // Save AI Message to Firestore
+              // 7. Save AI Message to Firestore
               await convRef.collection("messages").add({
                 conversation_id: from,
+                whatsapp_message_id: waReplyId,
                 body: aiResponse,
                 timestamp: FieldValue.serverTimestamp(),
                 type: "text",
                 direction: "outbound",
+                sender_type: "ai",
                 status: "sent",
                 school_id: schoolId
               });
 
               await convRef.update({
                 last_message: aiResponse,
-                last_message_at: FieldValue.serverTimestamp()
+                last_message_at: FieldValue.serverTimestamp(),
+                unread_count: 0 // AI reply clears unread count
               });
+            } else {
+              console.error("WHATSAPP_ACCESS_TOKEN or PHONE_NUMBER_ID missing. Cannot send AI reply.");
             }
           } catch (aiErr: any) {
-            console.error("OpenRouter Error:", aiErr.response?.data || aiErr.message);
+            console.error("OpenRouter or Meta API Error:", aiErr.response?.data || aiErr.message);
           }
         }
-      } catch (err) {
-        console.error("Error processing incoming WhatsApp:", err);
       }
+      
+      // Handle Status Updates
+      else if (
+        body.entry &&
+        body.entry[0].changes &&
+        body.entry[0].changes[0] &&
+        body.entry[0].changes[0].value.statuses &&
+        body.entry[0].changes[0].value.statuses[0]
+      ) {
+         const status = body.entry[0].changes[0].value.statuses[0];
+         const waMsgId = status.id;
+         const newStatus = status.status;
+         const recipient = status.recipient_id;
+         
+         console.log(`Status Update: ${waMsgId} for ${recipient} is now ${newStatus}`);
+         
+         // Find message in any school's conversation and update it
+         // This is a bit expensive, but correct for delivery tracking
+         const msgSnap = await db.collectionGroup("messages")
+          .where("whatsapp_message_id", "==", waMsgId)
+          .limit(1)
+          .get();
+        
+        if (!msgSnap.empty) {
+          await msgSnap.docs[0].ref.update({ status: newStatus });
+          console.log(`Updated message ${waMsgId} status to ${newStatus}`);
+        }
+      }
+    } catch (err) {
+      console.error("Webhook Background Processing Error:", err);
     }
-    // Handle Status Updates
-    if (
-      body.entry &&
-      body.entry[0].changes &&
-      body.entry[0].changes[0] &&
-      body.entry[0].changes[0].value.statuses &&
-      body.entry[0].changes[0].value.statuses[0]
-    ) {
-       const status = body.entry[0].changes[0].value.statuses[0];
-       const msgId = status.id;
-       const newStatus = status.status;
-       console.log(`WhatsApp Status update for ${msgId}: ${newStatus}`);
-       // TODO: Update specific message status in Firestore if tracking by msgId
-    }
-
-    res.sendStatus(200);
-  } else {
-    res.sendStatus(404);
-  }
+  })();
 };
 
 // WhatsApp Webhook Events
@@ -287,10 +338,11 @@ app.post("/api/whatsapp/send_text", async (req, res) => {
   const { to, text, schoolId } = req.body;
   const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
   const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const targetSchoolId = schoolId || "default";
 
   try {
     const response = await axios.post(
-      `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`,
+      `https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: "whatsapp",
         recipient_type: "individual",
@@ -305,22 +357,25 @@ app.post("/api/whatsapp/send_text", async (req, res) => {
 
     // Track in Firestore if sent successfully
     if (response.data && response.data.messages) {
-      const msgId = response.data.messages[0].id;
-      const convRef = db.collection("whatsapp_conversations").doc(to);
+      const waMsgId = response.data.messages[0].id;
+      const convRef = db.collection(`schools/${targetSchoolId}/whatsapp_conversations`).doc(to);
       
       await convRef.collection("messages").add({
-        msg_id: msgId,
+        whatsapp_message_id: waMsgId,
         body: text,
         timestamp: FieldValue.serverTimestamp(),
         type: "text",
         direction: "outbound",
-        status: "sent"
+        sender_type: "human",
+        status: "sent",
+        school_id: targetSchoolId
       });
 
       await convRef.set({
         last_message: text,
         last_message_at: FieldValue.serverTimestamp(),
         parent_phone: to,
+        school_id: targetSchoolId
       }, { merge: true });
     }
 
@@ -335,10 +390,11 @@ app.post("/api/whatsapp/send", async (req, res) => {
   const { to, template, language, components, schoolId } = req.body;
   const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
   const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const targetSchoolId = schoolId || "default";
 
   try {
     const response = await axios.post(
-      `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`,
+      `https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: "whatsapp",
         to,
@@ -356,22 +412,25 @@ app.post("/api/whatsapp/send", async (req, res) => {
 
     // Track template message in Firestore too
     if (response.data && response.data.messages) {
-      const msgId = response.data.messages[0].id;
-      const convRef = db.collection("whatsapp_conversations").doc(to);
+      const waMsgId = response.data.messages[0].id;
+      const convRef = db.collection(`schools/${targetSchoolId}/whatsapp_conversations`).doc(to);
       
       await convRef.collection("messages").add({
-        msg_id: msgId,
+        whatsapp_message_id: waMsgId,
         body: `[Template: ${template}]`,
         timestamp: FieldValue.serverTimestamp(),
         type: "template",
         direction: "outbound",
-        status: "sent"
+        sender_type: "system",
+        status: "sent",
+        school_id: targetSchoolId
       });
 
       await convRef.set({
         last_message: `[Template: ${template}]`,
         last_message_at: FieldValue.serverTimestamp(),
         parent_phone: to,
+        school_id: targetSchoolId
       }, { merge: true });
     }
 
