@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -21,6 +21,7 @@ import AICalls from './pages/AICalls';
 import WhatsAppCenter from './pages/WhatsAppCenter';
 import ParentPortal from './pages/ParentPortal';
 import TeacherPortal from './pages/TeacherPortal';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 import Settings from './pages/Settings';
 
@@ -29,6 +30,7 @@ import { SplashScreen } from './components/SplashScreen';
 function AppContent() {
   const { profile, loading } = useAuth();
   const [showSplash, setShowSplash] = React.useState(true);
+  const location = useLocation();
 
   React.useEffect(() => {
     // Hide splash after 2 seconds or when loading is done, whichever is later
@@ -56,6 +58,11 @@ function AppContent() {
 
   if (showSplash || (loading && !profile)) {
     return <SplashScreen />;
+  }
+
+  // Handle public routes before auth check
+  if (location.pathname === '/privacy-policy') {
+    return <PrivacyPolicy />;
   }
 
   if (!profile) {
