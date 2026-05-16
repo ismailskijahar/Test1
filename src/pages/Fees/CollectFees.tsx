@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
-import { whatsappService } from '../../services/whatsappService';
 import { Student, DueRecord, FeeTransaction, Receipt } from '../../types';
 import { feeEngine } from '../../services/feeEngine';
 import { formatCurrency, cn } from '../../lib/utils';
@@ -117,11 +116,6 @@ export default function CollectFees() {
       if (result) {
         setSuccessInfo(result);
         setShowReceiptModal(true);
-        
-        // Trigger WhatsApp Receipt
-        whatsappService.sendFeeReceiptAlert(profile.school_id, selectedStudent, paymentData.amount, result.receipt.receipt_no)
-          .catch(err => console.error("Failed to send WhatsApp receipt:", err));
-
         setSelectedStudent(null);
         setDues([]);
       }

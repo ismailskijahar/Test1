@@ -34,7 +34,9 @@ export default function Settings() {
   const [submitting, setSubmitting] = useState(false);
   const [profileFormData, setProfileFormData] = useState({
     name: profile?.name || '',
-    avatar_url: profile?.avatar_url || ''
+    avatar_url: profile?.avatar_url || '',
+    school_id: profile?.school_id || '',
+    school_name: profile?.school_name || ''
   });
 
   // Student ID Settings State
@@ -260,6 +262,48 @@ export default function Settings() {
                   />
                   <p className="text-[9px] text-slate-400 ml-4 italic">Email cannot be changed.</p>
                 </div>
+
+                {isAdmin && (
+                  <div className="pt-4 space-y-6 animate-in slide-in-from-bottom-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="h-4 w-1 bg-brand-coral rounded-full"></div>
+                      <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">School Identity</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">School Name</label>
+                        <input 
+                          required
+                          type="text"
+                          value={profileFormData.school_name}
+                          onChange={e => setProfileFormData({...profileFormData, school_name: e.target.value})}
+                          className="w-full px-6 py-4 bg-slate-50 dark:bg-white/5 dark:text-white rounded-2xl border-transparent focus:ring-4 focus:ring-brand-coral/10 text-sm font-bold transition-all"
+                          placeholder="e.g. Labbaik English School"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">School ID (Permanent)</label>
+                        <input 
+                          required
+                          type="text"
+                          disabled={!!profile?.school_id}
+                          value={profileFormData.school_id}
+                          onChange={e => setProfileFormData({...profileFormData, school_id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '')})}
+                          className={cn(
+                            "w-full px-6 py-4 rounded-2xl border-transparent focus:ring-4 focus:ring-brand-coral/10 text-sm font-mono font-bold transition-all",
+                            !!profile?.school_id 
+                              ? "bg-slate-100 dark:bg-white/5 text-slate-400 cursor-not-allowed" 
+                              : "bg-slate-50 dark:bg-white/5 dark:text-white"
+                          )}
+                          placeholder="e.g. les_fatepur"
+                        />
+                        {!profile?.school_id && (
+                          <p className="text-[9px] text-rose-500 ml-4 font-bold">This ID is permanent once set. It uniquely identifies your database.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <button 

@@ -35,11 +35,7 @@ import {
   Timetable,
   GalleryImage,
   HomeworkSubmission,
-  StudentIdSettings,
-  WhatsAppLog,
-  WhatsAppConversation,
-  WhatsAppMessage,
-  WhatsAppAiSettings
+  StudentIdSettings
 } from '../types';
 import { auth } from '../lib/firebase';
 
@@ -121,6 +117,7 @@ export const dataService = {
   },
 
   peekNextStudentSerial: async (schoolId: string, studentData: { class: string; section: string }) => {
+    const path = `schools/${schoolId}/system_counters`;
     const settings = await dataService.getStudentIdSettings(schoolId);
     if (!settings) return 1;
 
@@ -133,73 +130,82 @@ export const dataService = {
     }
 
     try {
-      const counterRef = doc(db, `schools/${schoolId}/system_counters`, counterId);
+      const counterRef = doc(db, path, counterId);
       const snap = await getDoc(counterRef);
       if (!snap.exists()) return 1;
       return (snap.data().value || 0) + 1;
     } catch (error) {
+      console.warn("peekNextStudentSerial error:", error);
       return 1;
     }
   },
 
   generateStudentId: async (schoolId: string, studentData: { class: string; section: string; roll_no: string }) => {
-    const settings = await dataService.getStudentIdSettings(schoolId);
-    if (!settings) throw new Error("Could not fetch Student ID settings");
-
-    const now = new Date();
-    const yearStr = settings.yearFormat === 'YYYY' ? now.getFullYear().toString() : now.getFullYear().toString().slice(-2);
+    const pathCounters = `schools/${schoolId}/system_counters`;
+    const pathStudents = `schools/${schoolId}/students`;
     
-    // Determine counter path
-    let counterId = 'global';
-    if (settings.useClassBasedSerial) {
-      counterId = `class_${studentData.class}`;
-      if (settings.useSectionBasedSerial) {
-        counterId = `class_${studentData.class}_section_${studentData.section}`;
-      }
-    }
+    try {
+      const settings = await dataService.getStudentIdSettings(schoolId);
+      if (!settings) throw new Error("Could not fetch Student ID settings");
 
-    const counterRef = doc(db, `schools/${schoolId}/system_counters`, counterId);
-    
-    let studentId = '';
-    let isUnique = false;
-    let attempts = 0;
-
-    while (!isUnique && attempts < 5) {
-      const serialValue = await runTransaction(db, async (transaction) => {
-        const counterSnap = await transaction.get(counterRef);
-        let nextVal = 1;
-        if (counterSnap.exists()) {
-          nextVal = (counterSnap.data().value || 0) + 1;
-        }
-        transaction.set(counterRef, { value: nextVal }, { merge: true });
-        return nextVal;
-      });
-
-      const serialStr = serialValue.toString().padStart(settings.serialLength, '0');
+      const now = new Date();
+      const yearStr = settings.yearFormat === 'YYYY' ? now.getFullYear().toString() : now.getFullYear().toString().slice(-2);
       
-      studentId = settings.format
-        .replace('{SCHOOL}', settings.prefix)
-        .replace('{YEAR}', yearStr)
-        .replace('{CLASS}', studentData.class)
-        .replace('{SECTION}', studentData.section)
-        .replace('{ROLL}', studentData.roll_no)
-        .replace('{SERIAL}', serialStr);
-
-      // Verify uniqueness across the collection
-      const q = query(
-        collection(db, `schools/${schoolId}/students`),
-        where('custom_id', '==', studentId)
-      );
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        isUnique = true;
+      // Determine counter path
+      let counterId = 'global';
+      if (settings.useClassBasedSerial) {
+        counterId = `class_${studentData.class}`;
+        if (settings.useSectionBasedSerial) {
+          counterId = `class_${studentData.class}_section_${studentData.section}`;
+        }
       }
-      attempts++;
+
+      const counterRef = doc(db, pathCounters, counterId);
+      
+      let studentId = '';
+      let isUnique = false;
+      let attempts = 0;
+
+      while (!isUnique && attempts < 5) {
+        const serialValue = await runTransaction(db, async (transaction) => {
+          const counterSnap = await transaction.get(counterRef);
+          let nextVal = 1;
+          if (counterSnap.exists()) {
+            nextVal = (counterSnap.data().value || 0) + 1;
+          }
+          transaction.set(counterRef, { value: nextVal }, { merge: true });
+          return nextVal;
+        });
+
+        const serialStr = serialValue.toString().padStart(settings.serialLength, '0');
+        
+        studentId = settings.format
+          .replace('{SCHOOL}', settings.prefix)
+          .replace('{YEAR}', yearStr)
+          .replace('{CLASS}', studentData.class)
+          .replace('{SECTION}', studentData.section)
+          .replace('{ROLL}', studentData.roll_no)
+          .replace('{SERIAL}', serialStr);
+
+        // Verify uniqueness across the collection
+        const q = query(
+          collection(db, pathStudents),
+          where('custom_id', '==', studentId)
+        );
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          isUnique = true;
+        }
+        attempts++;
+      }
+
+      if (!isUnique) throw new Error("Failed to generate a unique Student ID after multiple attempts. Please check counter settings.");
+
+      return studentId;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, pathCounters);
+      throw error; // keep throwing for UI catch
     }
-
-    if (!isUnique) throw new Error("Failed to generate a unique Student ID after multiple attempts. Please check counter settings.");
-
-    return studentId;
   },
 
   subscribeToStudents: (schoolId: string, callback: (students: Student[]) => void) => {
@@ -835,24 +841,8 @@ export const dataService = {
     }
   },
 
-  getStudentsByClass: async (schoolId: string, className: string, section: string) => {
-    const path = `schools/${schoolId}/students`;
-    try {
-      const q = query(
-        collection(db, path), 
-        where('class', '==', className), 
-        where('section', '==', section)
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      return [];
-    }
-  },
-
   getWhatsAppLogs: async (schoolId: string) => {
-    const path = `schools/${schoolId}/whatsapp_delivery_logs`;
+    const path = `schools/${schoolId}/whatsapp_logs`;
     try {
       const q = query(collection(db, path), orderBy('sent_at', 'desc'), limit(50));
       const snapshot = await getDocs(q);
@@ -863,38 +853,26 @@ export const dataService = {
     }
   },
 
-  getWhatsAppAiSettings: async (schoolId: string) => {
-    const path = `schools/${schoolId}/settings/whatsapp_ai_settings`;
+  getWhatsAppStats: async (schoolId: string) => {
+    const path = `schools/${schoolId}/whatsapp_logs`;
     try {
-      const snap = await getDoc(doc(db, `schools/${schoolId}/settings`, 'whatsapp_ai_settings'));
-      if (!snap.exists()) {
-        return {
-          school_id: schoolId,
-          is_enabled: true,
-          prompt_template: "You are a specialized AI Assistant for AerovaX School. Answer questions about timings, fees, and school events.",
-          welcome_message: "Hello! Testing AerovaX WhatsApp Assistant.",
-          fall_back_message: "Please contact the school office for confirmation.",
-          updated_at: new Date().toISOString()
-        } as WhatsAppAiSettings;
-      }
-      return snap.data() as WhatsAppAiSettings;
+      const snapshot = await getDocs(collection(db, path));
+      const logs = snapshot.docs.map(doc => doc.data());
+      
+      const today = new Date().toISOString().split('T')[0];
+      const todayLogs = logs.filter(l => {
+        const timestamp = l.sent_at?.toDate ? l.sent_at.toDate() : new Date(l.sent_at);
+        return timestamp.toISOString().startsWith(today);
+      });
+      
+      return {
+        totalToday: todayLogs.length,
+        delivered: todayLogs.filter(l => l.status === 'sent' || l.status === 'delivered').length,
+        failed: todayLogs.filter(l => l.status === 'failed').length
+      };
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, path);
-      return null;
-    }
-  },
-
-  updateWhatsAppAiSettings: async (schoolId: string, data: Partial<WhatsAppAiSettings>) => {
-    const path = `schools/${schoolId}/settings/whatsapp_ai_settings`;
-    try {
-      await setDoc(doc(db, `schools/${schoolId}/settings`, 'whatsapp_ai_settings'), {
-        ...data,
-        updated_at: serverTimestamp()
-      }, { merge: true });
-      return true;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
-      return false;
+      handleFirestoreError(error, OperationType.LIST, path);
+      return { totalToday: 0, delivered: 0, failed: 0 };
     }
   },
 
@@ -1135,45 +1113,6 @@ export const dataService = {
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
       return [];
-    }
-  },
-
-  addWhatsAppLog: async (schoolId: string, log: Omit<WhatsAppLog, 'id'>) => {
-    const path = `schools/${schoolId}/whatsapp_delivery_logs`;
-    try {
-      return await addDoc(collection(db, path), log);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
-    }
-  },
-
-
-  getWhatsAppConversations: (schoolId: string, callback: (conversations: WhatsAppConversation[]) => void) => {
-    const path = `schools/${schoolId}/whatsapp_conversations`;
-    const q = query(collection(db, path), orderBy('last_message_at', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as WhatsAppConversation[]);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
-    });
-  },
-
-  getWhatsAppMessages: (schoolId: string, conversationId: string, callback: (messages: WhatsAppMessage[]) => void) => {
-    const path = `schools/${schoolId}/whatsapp_conversations/${conversationId}/messages`;
-    const q = query(collection(db, path), orderBy('created_at', 'asc'));
-    return onSnapshot(q, (snapshot) => {
-      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as WhatsAppMessage[]);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
-    });
-  },
-
-  updateWhatsAppConversation: async (schoolId: string, conversationId: string, data: Partial<WhatsAppConversation>) => {
-    const path = `schools/${schoolId}/whatsapp_conversations/${conversationId}`;
-    try {
-      await updateDoc(doc(db, path), data);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   },
 

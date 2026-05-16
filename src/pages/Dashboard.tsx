@@ -78,6 +78,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!profile) return;
+    if (!profile.school_id && profile.role !== 'parent') {
+      setLoading(false);
+      return;
+    }
     const load = async () => {
       const today = format(new Date(), 'yyyy-MM-dd');
       const currentMonth = format(new Date(), 'yyyy-MM');
@@ -183,6 +187,21 @@ export default function Dashboard() {
     <div className="flex flex-col xl:flex-row gap-8 pb-12">
       {/* Main Content Area */}
       <div className="flex-1 space-y-8 animate-in fade-in duration-700">
+        {/* Missing School ID Alert */}
+        {profile && !profile.school_id && profile.role !== 'parent' && (
+          <div className="p-8 bg-rose-50 dark:bg-rose-500/10 border-2 border-dashed border-rose-200 dark:border-rose-500/20 rounded-[3rem] flex flex-col items-center text-center gap-6 animate-in slide-in-from-top-4">
+              <div className="h-20 w-20 bg-rose-500 text-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-rose-500/20">
+                <Info className="h-10 w-10" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-rose-600 dark:text-rose-400">School Identity Not Set</h3>
+                <p className="text-sm text-rose-500/70 font-bold max-w-md">Your account is not associated with any school. Please configure your school's unique ID and name in the settings to activate your dashboard.</p>
+              </div>
+              <a href="/settings" className="px-10 py-5 bg-[#2B2D42] text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-xl">
+                Configure School Profile
+              </a>
+          </div>
+        )}
         
         {/* Stat Cards - Bento Style */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">

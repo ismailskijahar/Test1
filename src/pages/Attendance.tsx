@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { dataService } from '../services/dataService';
-import { whatsappService } from '../services/whatsappService';
 import { Student, AttendanceRecord, UserProfile } from '../types';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
@@ -90,14 +89,6 @@ export default function Attendance() {
     // Here we'll just mark them.
     for (const record of records) {
       await dataService.markAttendance(profile.school_id, record);
-      
-      // Trigger WhatsApp Alert
-      const student = students.find(s => s.id === record.student_id);
-      if (student) {
-        // We use a non-blocking call to avoid slowing down the UI
-        whatsappService.sendAttendanceAlert(profile.school_id, student, record.status)
-          .catch(err => console.error("Failed to send attendance WhatsApp:", err));
-      }
     }
     
     setSaving(false);

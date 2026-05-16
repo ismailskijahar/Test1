@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -21,9 +21,6 @@ import AICalls from './pages/AICalls';
 import WhatsAppCenter from './pages/WhatsAppCenter';
 import ParentPortal from './pages/ParentPortal';
 import TeacherPortal from './pages/TeacherPortal';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import TermsOfService from './pages/TermsOfService';
-import DataDeletion from './pages/DataDeletion';
 
 import Settings from './pages/Settings';
 
@@ -32,7 +29,6 @@ import { SplashScreen } from './components/SplashScreen';
 function AppContent() {
   const { profile, loading } = useAuth();
   const [showSplash, setShowSplash] = React.useState(true);
-  const location = useLocation();
 
   React.useEffect(() => {
     // Hide splash after 2 seconds or when loading is done, whichever is later
@@ -62,22 +58,12 @@ function AppContent() {
     return <SplashScreen />;
   }
 
-  // Handle public routes before auth check
-  if (location.pathname === '/privacy-policy') {
-    return <PrivacyPolicy />;
-  }
-  if (location.pathname === '/terms-of-service') {
-    return <TermsOfService />;
-  }
-  if (location.pathname === '/data-deletion') {
-    return <DataDeletion />;
-  }
-
   if (!profile) {
     return <Login />;
   }
 
-  const isAdmin = ['super_admin', 'school_admin', 'accountant'].includes(profile.role);
+  const isAdmin = ['super_admin', 'school_admin'].includes(profile.role);
+  const isAccountant = profile.role === 'accountant';
   const isTeacher = profile.role === 'teacher';
   const isParent = profile.role === 'parent';
 
@@ -119,28 +105,34 @@ function AppContent() {
         <main className="flex-1 overflow-y-auto px-4 md:px-10 scroll-smooth">
           <div className="max-w-[1600px] mx-auto pt-8">
             <Routes>
-            {(isAdmin || isTeacher) && (
-              <>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/students" element={<Students />} />
-                <Route path="/teachers" element={<Teachers />} />
-                <Route path="/parents" element={<Parents />} />
-                <Route path="/attendance" element={<Attendance />} />
-                <Route path="/fees" element={<Fees />}>
-                  <Route path="collect" element={<CollectFees />} />
-                  <Route path="due-students" element={<DueStudents />} />
-                  <Route path="fee-structure" element={<FeeStructure />} />
-                  <Route path="receipts" element={<Receipts />} />
-                  <Route path="reports" element={<Reports />} />
-                </Route>
-                <Route path="/ai-calls" element={<AICalls />} />
-                {profile.role !== 'teacher' && <Route path="/whatsapp-center" element={<WhatsAppCenter />} />}
-                <Route path="/announcements" element={<Announcements />} />
-                <Route path="/settings" element={<Settings />} />
-              </>
-            )}
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
+              {(isAdmin || isAccountant || isTeacher) && (
+                <>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/students" element={<Students />} />
+                  { (isAdmin || isAccountant) && (
+                    <>
+                      <Route path="/teachers" element={<Teachers />} />
+                      <Route path="/parents" element={<Parents />} />
+                      <Route path="/fees" element={<Fees />}>
+                        <Route path="collect" element={<CollectFees />} />
+                        <Route path="due-students" element={<DueStudents />} />
+                        <Route path="fee-structure" element={<FeeStructure />} />
+                        <Route path="receipts" element={<Receipts />} />
+                        <Route path="reports" element={<Reports />} />
+                      </Route>
+                      <Route path="/ai-calls" element={<AICalls />} />
+                      { isAdmin && <Route path="/whatsapp-center" element={<WhatsAppCenter />} /> }
+                      {/* Alias for old route */}
+                      <Route path="/whatsapp-alerts" element={<Navigate to="/whatsapp-center" />} />
+                    </>
+                  )}
+                  <Route path="/attendance" element={<Attendance />} />
+                  <Route path="/announcements" element={<Announcements />} />
+                  <Route path="/settings" element={<Settings />} />
+                </>
+              )}
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
           </div>
         </main>
       </div>

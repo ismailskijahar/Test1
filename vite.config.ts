@@ -9,7 +9,6 @@ export default defineConfig(({mode}) => {
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY),
     },
     resolve: {
       alias: {
@@ -17,15 +16,9 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      host: '0.0.0.0',
-      port: 3000,
-      strictPort: true,
-      allowedHosts: true,
-      // Disable websocket/HMR completely
-      hmr: false,
-      watch: {
-        usePolling: true,
-      },
+      // HMR is disabled in AI Studio via DISABLE_HMR env var.
+      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      hmr: process.env.DISABLE_HMR !== 'true',
     },
   };
 });

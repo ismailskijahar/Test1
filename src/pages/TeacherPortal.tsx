@@ -30,7 +30,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { dataService } from '../services/dataService';
-import { whatsappService } from '../services/whatsappService';
 import { Student, AttendanceRecord, Homework, LeaveRequest, Attachment } from '../types';
 import { cn } from '../lib/utils';
 import { format, isSameDay } from 'date-fns';
@@ -353,10 +352,6 @@ export default function TeacherPortal() {
           teacher_id: profile.uid,
           school_id: profile.school_id
         });
-        
-        // Trigger WhatsApp Alert for new homework
-        whatsappService.sendHomeworkAlert(profile.school_id, profile.class_assigned!, profile.section_assigned!, hwFormData.subject, hwFormData.title)
-          .catch(err => console.error("Failed to send WhatsApp homework alert:", err));
       }
       setShowHomeworkModal(false);
       setEditingHomeworkId(null);

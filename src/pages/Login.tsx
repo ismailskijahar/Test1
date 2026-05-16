@@ -5,8 +5,6 @@ import { GraduationCap, ArrowRight, Lock, Mail, Users, UserCircle } from 'lucide
 import { cn } from '../lib/utils';
 import { Logo } from '../components/Logo';
 
-import { Link } from 'react-router-dom';
-
 export default function Login() {
   const { login, teacherLogin, parentLogin } = useAuth();
   const { t } = useLanguage();
@@ -230,15 +228,9 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col md:flex-row items-center gap-4 md:gap-8 opacity-40 hover:opacity-100 transition-opacity whitespace-nowrap">
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-8 opacity-40">
          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('secure_access_label')}</span>
-         <div className="hidden md:block w-1 h-1 bg-slate-300 rounded-full"></div>
-         <div className="flex gap-4">
-           <Link to="/privacy-policy" className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-brand-indigo transition-colors">Privacy</Link>
-           <Link to="/terms-of-service" className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-brand-indigo transition-colors">Terms</Link>
-           <Link to="/data-deletion" className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-brand-indigo transition-colors">Deletion</Link>
-         </div>
-         <div className="hidden md:block w-1 h-1 bg-slate-300 rounded-full"></div>
+         <div className="w-1 h-1 bg-slate-300 rounded-full"></div>
          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">© 2024 AerovaX</span>
       </div>
     </div>

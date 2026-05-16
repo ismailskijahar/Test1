@@ -10,40 +10,38 @@ rules_version = '2';
 
     // --- Helper Functions ---
     function isSignedIn() { 
-      return request.auth != null && (
-        request.auth.token.firebase.sign_in_provider == 'anonymous' || 
-        request.auth.token.email_verified == true || 
-        request.auth.token.email == 'ismailskijahar@gmail.com'
-      ); 
+      return request.auth != null; 
     }
     
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
     function getProfile() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data 
-        : null;
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function isRole(p, r) { return p != null && p.get('role', 'none') == r; }
     function isSuperAdmin() {
-      return request.auth != null && request.auth.token.email == 'ismailskijahar@gmail.com';
+      return request.auth != null && (
+        request.auth.token.email == 'ismailskijahar@gmail.com'
+        // Add more super admins here if needed
+      );
     }
-    function isSuperAdminEmail() {
-      return request.auth != null && request.auth.token.email == 'ismailskijahar@gmail.com';
+    
+    function belongsToSchool(p, sid) {
+      return isSuperAdmin() || (p != null && p.get('school_id', '') == sid);
     }
 
     function isAdmin(p) { 
-      return isSuperAdmin() || isRole(p, 'super_admin') || isRole(p, 'school_admin') || isRole(p, 'admin'); 
+      return isSuperAdmin() || isRole(p, 'admin') || isRole(p, 'school_admin') || isRole(p, 'super_admin'); 
     }
     function isTeacher(p) { return isRole(p, 'teacher'); }
     function isParent(p) { return isRole(p, 'parent'); }
     function isAccountant(p) { return isRole(p, 'accountant'); }
     
-    function belongsToSchool(p, sid) {
-      return isSuperAdmin() || (p != null && (p.get('school_id', 'none') == sid || isRole(p, 'super_admin')));
-    }
-
-    function isSystemUser() {
-      return isSignedIn();
+    function isVerified() {
+      return request.auth.token.email_verified == true || isSuperAdmin();
     }
 
     // --- Validation Helpers ---
@@ -51,9 +49,10 @@ rules_version = '2';
     function existing() { return resource.data; }
 
     function isValidStudent(data) {
-      return data.name is string && data.name.size() <= 100 
+      return data.get('name', '') is string && data.get('name', '').size() <= 100 
           && data.get('class', '') is string 
-          && data.school_id is string;
+          && data.get('school_id', '') is string
+          && data.get('custom_id', '') is string;
     }
 
     function isValidAttendance(data) {
@@ -102,9 +101,9 @@ rules_version = '2';
     }
 
     function isValidDueRecord(data) {
-      return data.student_id is string && data.month is string 
-          && data.amount is number && data.status in ["Paid", "Due", "Overdue", "Partially Paid", "Prepaid"]
-          && data.school_id is string;
+      return data.get('student_id', '') is string && data.get('month', '') is string 
+          && data.get('amount', 0) is number && data.get('status', 'Due') in ["Paid", "Due", "Overdue", "Partially Paid", "Prepaid"]
+          && data.get('school_id', '') is string;
     }
 
     function isValidFeeTransaction(data) {
@@ -117,6 +116,10 @@ rules_version = '2';
       return data.receipt_no is string && data.student_id is string 
           && data.transaction_id is string && data.amount is number 
           && data.school_id is string;
+    }
+
+    function isValidCounter(data) {
+      return data.get('value', 0) is number;
     }
 
     // --- Collection Routes ---
@@ -159,97 +162,97 @@ rules_version = '2';
 
     // Schools Scoped Collections
     match /schools/{schoolId} {
-      allow read: if isSignedIn() && isSuperAdminEmail();
+      allow read: if isSignedIn() && (isSuperAdmin() || getProfile().school_id == schoolId);
       
       match /students/{studentId} {
-        allow read: if isSystemUser(); 
-        allow create: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile())) && isValidStudent(incoming());
-        allow update: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile()) || isParent(getProfile())) && isValidStudent(incoming());
-        allow delete: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId); 
+        allow create: if isSignedIn() && (isSuperAdmin() || (isAdmin(getProfile()) && belongsToSchool(getProfile(), schoolId))) && isValidStudent(incoming());
+        allow update: if isSignedIn() && (isSuperAdmin() || belongsToSchool(getProfile(), schoolId)) && isValidStudent(incoming());
+        allow delete: if isSignedIn() && (isSuperAdmin() || (isAdmin(getProfile()) && belongsToSchool(getProfile(), schoolId)));
       }
 
       match /attendance/{attendanceId} {
-        allow read: if isSystemUser();
-        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile())) && isValidAttendance(incoming());
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isTeacher(getProfile())) && isValidAttendance(incoming());
       }
 
       match /fees/{feeId} {
-        allow read: if isSystemUser();
-        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile()));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isAccountant(getProfile()));
       }
 
       match /payments/{paymentId} {
-        allow read: if isSystemUser();
-        allow create: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile()));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow create: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isAccountant(getProfile()));
       }
 
       match /announcements/{announcementId} {
-        allow read: if isSystemUser();
-        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile()));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isTeacher(getProfile()));
       }
 
       // --- Fee Management Collections ---
       match /fee_structures/{structureId} {
-        allow read: if isSystemUser();
-        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile())) && isValidFeeStructure(incoming());
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isAccountant(getProfile())) && isValidFeeStructure(incoming());
       }
 
       match /due_records/{dueId} {
-        allow read: if isSystemUser();
-        allow create, update: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile())) && isValidDueRecord(incoming());
-        allow delete: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow create, update: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isAccountant(getProfile())) && isValidDueRecord(incoming());
+        allow delete: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
       }
 
       match /fee_transactions/{txId} {
-        allow read: if isSystemUser();
-        allow create: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile())) && isValidFeeTransaction(incoming());
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow create: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isAccountant(getProfile())) && isValidFeeTransaction(incoming());
         allow update: if false;
-        allow delete: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+        allow delete: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
       }
 
       match /receipts/{receiptId} {
-        allow read: if isSystemUser();
-        allow create: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isAccountant(getProfile())) && isValidReceipt(incoming());
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow create: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isAccountant(getProfile())) && isValidReceipt(incoming());
         allow update: if false;
-        allow delete: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+        allow delete: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
       }
 
       // New collections for accurate tracking
       match /payment_history/{id} {
-        allow read: if isSystemUser();
-        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
       }
 
       match /partial_payments/{id} {
-        allow read: if isSystemUser();
-        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
       }
 
       match /prepaid_balances/{id} {
-        allow read: if isSystemUser();
-        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
       }
 
       match /homework/{homeworkId} {
-        allow read: if isSystemUser();
-        allow create, update: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile())) && isValidHomework(incoming());
-        allow delete: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile()));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow create, update: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isTeacher(getProfile())) && isValidHomework(incoming());
+        allow delete: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isTeacher(getProfile()));
 
         match /views/{viewId} {
-          allow read: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile()));
-          allow create, update: if isSystemUser() && viewId == request.auth.uid;
+          allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isTeacher(getProfile()));
+          allow create, update: if isSignedIn() && viewId == request.auth.uid;
         }
       }
 
       match /homework_submissions/{submissionId} {
-        allow read: if request.auth != null && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile()) || resource.data.student_id == request.auth.uid);
-        allow create: if request.auth != null && incoming().student_id == request.auth.uid && isValidHomeworkSubmission(incoming());
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isTeacher(getProfile()) || resource.data.student_id == request.auth.uid);
+        allow create: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && incoming().student_id == request.auth.uid && isValidHomeworkSubmission(incoming());
       }
 
       match /leaves/{leaveId} {
-        allow read: if isSystemUser();
-        allow create: if isSystemUser() && isValidLeave(incoming());
-        allow update: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()) || isTeacher(getProfile())) && isValidLeave(incoming());
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow create: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isValidLeave(incoming());
+        allow update: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isTeacher(getProfile())) && isValidLeave(incoming());
       }
 
       match /gallery/{imageId} {
@@ -268,34 +271,49 @@ rules_version = '2';
       }
 
       match /calls/{callId} {
-        allow read: if isSignedIn() && (isSuperAdminEmail() || belongsToSchool(getProfile(), schoolId));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
         allow write: if false; // System only
       }
 
       match /call_queue/{queueId} {
-        allow read: if isSignedIn() && (isSuperAdminEmail() || belongsToSchool(getProfile(), schoolId));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
         allow write: if false; // System only
       }
 
       match /whatsapp_logs/{logId} {
-        allow read: if isSignedIn() && (isSuperAdminEmail() || belongsToSchool(getProfile(), schoolId));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
         allow write: if false; // System only
+      }
+
+      match /whatsapp_conversations/{convId} {
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
+
+        match /messages/{msgId} {
+          allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+          allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
+        }
+      }
+
+      match /whatsapp_delivery_logs/{logId} {
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if false; // System/Admin SDK only
+      }
+
+      match /settings/whatsapp_ai {
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && belongsToSchool(getProfile(), schoolId) && isAdmin(getProfile());
       }
 
       // --- Student ID Settings & Counters ---
       match /settings/student_id {
-        allow read: if isSystemUser();
-        allow write: if isSystemUser() && (isSuperAdmin() || isAdmin(getProfile()));
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && (isSuperAdmin() || (isAdmin(getProfile()) && belongsToSchool(getProfile(), schoolId)));
       }
 
       match /system_counters/{counterId} {
-        allow read: if isSystemUser();
-        allow write: if isSystemUser() && (
-          isSuperAdmin() || 
-          isAdmin(getProfile()) || 
-          isTeacher(getProfile()) || 
-          isAccountant(getProfile())
-        );
+        allow read: if isSignedIn() && belongsToSchool(getProfile(), schoolId);
+        allow write: if isSignedIn() && (isSuperAdmin() || (belongsToSchool(getProfile(), schoolId) && (isAdmin(getProfile()) || isTeacher(getProfile()) || isAccountant(getProfile())))) && isValidCounter(incoming());
       }
     }
 

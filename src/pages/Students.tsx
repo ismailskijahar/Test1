@@ -13,7 +13,9 @@ import {
   Printer,
   Pencil,
   Trash2,
-  Fingerprint
+  Fingerprint,
+  Shield,
+  AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -194,59 +196,88 @@ export default function Students() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
+    if (!profile.school_id && profile.role !== 'parent') {
+      setErrorMessage("Admin school ID missing. Please configure school profile first.");
+      return;
+    }
     setErrorMessage(null);
 
-    // 1. Phone number validation (10 digits)
-    const phoneRegex = /^\d{10}$/;
+    // 1. Phone number validation (10-12 digits to allow for leading 0 or country codes)
+    const phoneRegex = /^\d{10,12}$/;
     if (!phoneRegex.test(newStudent.father_phone)) {
-      setErrorMessage("Father's phone number must be exactly 10 digits.");
+      setErrorMessage("Father's phone number must be 10-12 digits.");
       return;
     }
     if (!phoneRegex.test(newStudent.mother_phone)) {
-      setErrorMessage("Mother's phone number must be exactly 10 digits.");
+      setErrorMessage("Mother's phone number must be 10-12 digits.");
       return;
     }
 
     let finalCustomId = newStudent.custom_id;
 
-    if (!editingStudent) {
-      setIsGeneratingId(true);
-      try {
+    try {
+      if (!editingStudent) {
+        setIsGeneratingId(true);
         finalCustomId = await dataService.generateStudentId(profile.school_id, {
           class: newStudent.class,
           section: newStudent.section,
           roll_no: newStudent.roll_no
         });
-      } catch (err: any) {
-        setErrorMessage(err.message || "Failed to generate unique Student ID.");
         setIsGeneratingId(false);
-        return;
       }
+      
+      if (editingStudent) {
+        await dataService.updateStudent(profile.school_id, editingStudent.id, {
+          ...newStudent
+        });
+      } else {
+        const docRef = await dataService.addStudent(profile.school_id, {
+          ...newStudent,
+          custom_id: finalCustomId,
+          school_id: profile.school_id
+        });
+        if (docRef) {
+          // Trigger due engine for this new student
+          await feeEngine.syncStudentDues(profile.school_id);
+        }
+      }
+      
+      setIsModalOpen(false);
+      resetForm();
+    } catch (err: any) {
+      console.error("Registration error:", err);
+      // Try to parse JSON error from handleFirestoreError
+      try {
+        const parsed = JSON.parse(err.message);
+        setErrorMessage(`Registration Failed: ${parsed.error} [Path: ${parsed.path}] [Op: ${parsed.operationType}] [Role: ${profile?.role}] [School: ${profile?.school_id}]`);
+      } catch {
+        setErrorMessage(err.message || "An unexpected error occurred during registration.");
+      }
+    } finally {
       setIsGeneratingId(false);
     }
-    
-    if (editingStudent) {
-      await dataService.updateStudent(profile.school_id, editingStudent.id, {
-        ...newStudent
-      });
-    } else {
-      const docRef = await dataService.addStudent(profile.school_id, {
-        ...newStudent,
-        custom_id: finalCustomId,
-        school_id: profile.school_id
-      });
-      if (docRef) {
-        // Trigger due engine for this new student
-        await feeEngine.syncStudentDues(profile.school_id);
-      }
-    }
-    
-    setIsModalOpen(false);
-    resetForm();
   };
 
   return (
     <div className="space-y-8 print:space-y-0">
+      {/* Missing School ID Alert */}
+      {profile && !profile.school_id && profile.role !== 'parent' && (
+        <div className="p-6 bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 bg-rose-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-rose-500/20">
+                <Shield className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-rose-600 dark:text-rose-400">School ID Configuration Missing</h3>
+                <p className="text-xs text-rose-500/70 font-medium">Please configure your school profile in settings before performing any administrative actions.</p>
+              </div>
+            </div>
+            <a href="/settings" className="px-6 py-3 bg-rose-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-rose-600 transition-all shadow-md">
+              Go to Settings
+            </a>
+        </div>
+      )}
+
       {/* Printable Area - Hidden on screen, shown on top during print */}
       <div id="print-only-layout" className="print-only">
         <div className="print-header">
@@ -634,8 +665,8 @@ export default function Students() {
                             className="w-full px-5 py-3.5 bg-slate-50 dark:bg-white/5 dark:text-white rounded-2xl border-none focus:ring-2 focus:ring-brand-coral/20 text-sm transition-all"
                           >
                              <option value="">{t('all')}</option>
-                             {Array.from({length: 12}, (_, i) => i + 1).map(num => (
-                               <option key={num} value={num.toString()}>{t('class_menu')} {num}</option>
+                             {['Nursery', 'LKG', 'UKG', ...Array.from({length: 12}, (_, i) => (i + 1).toString())].map(cls => (
+                               <option key={cls} value={cls}>{cls.length <= 2 ? `${t('class_menu')} ${cls}` : cls}</option>
                              ))}
                           </select>
                        </div>
@@ -752,8 +783,8 @@ export default function Students() {
                              setNewStudent({
                                ...newStudent, 
                                fee_structure_id: structure.id,
-                               class_key: structure.class_key,
-                               class: structure.class_name // Sync class name
+                               class_key: structure.class_key
+                               // Removed direct class sync to avoid overwriting specific class name
                              });
                            } else {
                              setNewStudent({...newStudent, fee_structure_id: e.target.value});

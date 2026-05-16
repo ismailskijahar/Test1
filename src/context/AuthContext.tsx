@@ -84,9 +84,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const newProfile: UserProfile = {
                 uid: user.uid,
                 email: user.email || '',
-                role: 'school_admin' as any,
+                role: 'admin' as any, // Using 'admin' as requested
                 name: user.displayName || 'New Admin',
-                school_id: 'default_school',
+                school_id: '', // Leave empty to force setup
                 createdAt: new Date().toISOString(),
               };
               await setDoc(docRef, newProfile);

@@ -1,149 +1,150 @@
-import axios from "axios";
-import { dataService } from "./dataService";
-import { WhatsAppLog, Student } from "../types";
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  setDoc,
+  updateDoc, 
+  doc, 
+  orderBy,
+  limit,
+  onSnapshot,
+  getDoc,
+  serverTimestamp,
+  Timestamp,
+  increment
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import axios from 'axios';
+
+export interface WhatsAppConversation {
+  id: string;
+  phone: string;
+  name: string;
+  mode: 'ai' | 'human';
+  school_id: string;
+  unread_count: number;
+  last_message?: string;
+  updated_at: any;
+  created_at: any;
+}
+
+export interface WhatsAppMessage {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'admin' | 'system';
+  content: string;
+  type?: 'text' | 'image' | 'audio' | 'document' | 'video' | 'voice' | 'sticker';
+  media_id?: string | null;
+  whatsapp_msg_id?: string;
+  school_id: string;
+  created_at: any;
+}
 
 export const whatsappService = {
-  /**
-   * Sends a template message via our Express backend
-   */
-  sendTemplate: async (
-    schoolId: string,
-    student: Student,
-    templateName: string,
-    languageCode: string = "en",
-    components: any[] = []
-  ) => {
-    const parentPhone = student.father_phone || student.mother_phone;
-    if (!parentPhone) {
-      console.warn(`No phone number for student ${student.name}`);
-      return null;
-    }
-
-    // Standardize phone format if needed (Meta usually wants 12 digit with country code)
-    // For now assuming the user provides it correctly or we'll add a helper
-    const formattedPhone = parentPhone.replace(/\D/g, "");
-
+  // Get conversations for a school
+  getConversations: async (schoolId: string) => {
+    const path = `schools/${schoolId}/whatsapp_conversations`;
     try {
-      const response = await axios.post("/api/whatsapp/send", {
-        to: formattedPhone,
-        template: templateName,
-        language: languageCode,
-        components
-      });
-
-      // Log the success in Firestore
-      const log: Omit<WhatsAppLog, 'id'> = {
-        student_id: student.id,
-        student_name: student.name,
-        parent_phone: parentPhone,
-        status: "sent",
-        message: `Template: ${templateName}`,
-        type: "template",
-        sent_at: new Date().toISOString(),
-        school_id: schoolId
-      };
-      
-      await dataService.addWhatsAppLog(schoolId, log);
-      return response.data;
-    } catch (error: any) {
-      console.error("WhatsApp Send Error:", error.response?.data || error.message);
-      
-      // Log the failure
-      const log: Omit<WhatsAppLog, 'id'> = {
-        student_id: student.id,
-        student_name: student.name,
-        parent_phone: parentPhone,
-        status: "failed",
-        message: error.response?.data?.error?.message || error.message,
-        type: "template",
-        sent_at: new Date().toISOString(),
-        school_id: schoolId
-      };
-      await dataService.addWhatsAppLog(schoolId, log);
-      
-      throw error;
+      const q = query(collection(db, path), orderBy('updated_at', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as WhatsAppConversation[];
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      return [];
     }
   },
 
-  /**
-   * Automated Attendance Alert
-   */
-  sendAttendanceAlert: async (schoolId: string, student: Student, status: 'present' | 'absent') => {
-    // Note: Template names must be pre-approved in Meta Business Suite
-    // Assuming templates like 'attendance_alert' exist
-    const templateName = status === 'present' ? 'attendance_present' : 'attendance_absent';
+  // Subscribe to conversations for real-time updates
+  subscribeToConversations: (schoolId: string, callback: (conversations: WhatsAppConversation[]) => void) => {
+    const path = `schools/${schoolId}/whatsapp_conversations`;
+    const q = query(collection(db, path), orderBy('updated_at', 'desc'));
     
-    // Example components for "Your child {{1}} of Class {{2}} is marked {{3}} today"
-    const components = [
-      {
-        type: "body",
-        parameters: [
-          { type: "text", text: student.name },
-          { type: "text", text: student.class },
-          { type: "text", text: status.toUpperCase() }
-        ]
-      }
-    ];
-
-    return whatsappService.sendTemplate(schoolId, student, templateName, "en", components);
-  },
-
-  /**
-   * Automated Fee Receipt Alert
-   */
-  sendFeeReceiptAlert: async (schoolId: string, student: Student, amount: number, receiptNo: string) => {
-    const components = [
-      {
-        type: "body",
-        parameters: [
-          { type: "text", text: student.name },
-          { type: "text", text: student.class },
-          { type: "text", text: amount.toString() },
-          { type: "text", text: receiptNo }
-        ]
-      }
-    ];
-
-    return whatsappService.sendTemplate(schoolId, student, "fee_receipt", "en", components);
-  },
-
-  /**
-   * Automated Homework Alert
-   */
-  sendHomeworkAlert: async (schoolId: string, className: string, section: string, subject: string, title: string) => {
-    // Homework alerts are usually broadcasts to multiple students
-    const students = await dataService.getStudentsByClass(schoolId, className, section);
-    
-    const promises = students.map(student => {
-      const components = [
-        {
-          type: "body",
-          parameters: [
-            { type: "text", text: student.name },
-            { type: "text", text: subject },
-            { type: "text", text: title }
-          ]
-        }
-      ];
-      return whatsappService.sendTemplate(schoolId, student, "homework_alert", "en", components)
-        .catch(err => console.error(`Failed to send homework WhatsApp to ${student.name}:`, err));
+    return onSnapshot(q, (snapshot) => {
+      const convs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as WhatsAppConversation[];
+      callback(convs);
+    }, (error) => {
+      console.error("Subscription error (conversations):", error);
     });
-
-    return Promise.all(promises);
   },
 
-  /**
-   * Manual Text Message (Human Mode)
-   */
-  sendTextMessage: async (schoolId: string, to: string, text: string) => {
+  // Get messages for a specific conversation
+  getMessages: async (schoolId: string, conversationId: string) => {
+    const path = `schools/${schoolId}/whatsapp_conversations/${conversationId}/messages`;
     try {
-      const response = await axios.post("/api/whatsapp/send_text", {
-        to: to.replace(/\D/g, ""),
-        text
+      const q = query(
+        collection(db, path), 
+        orderBy('created_at', 'asc')
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as WhatsAppMessage[];
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      return [];
+    }
+  },
+
+  // Subscribe to messages for real-time chat
+  subscribeToMessages: (schoolId: string, conversationId: string, callback: (messages: WhatsAppMessage[]) => void) => {
+    const path = `schools/${schoolId}/whatsapp_conversations/${conversationId}/messages`;
+    const q = query(
+      collection(db, path), 
+      orderBy('created_at', 'asc')
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as WhatsAppMessage[];
+      callback(msgs);
+    }, (error) => {
+      console.error("Subscription error (messages):", error);
+    });
+  },
+
+  // Update conversation mode
+  updateMode: async (schoolId: string, conversationId: string, mode: 'ai' | 'human') => {
+    try {
+      await axios.patch('/api/whatsapp/mode', {
+        school_id: schoolId,
+        conversation_id: conversationId,
+        mode
       });
+      return true;
+    } catch (error) {
+      console.error("Error updating mode:", error);
+      return false;
+    }
+  },
+
+  // Mark messages as read
+  markAsRead: async (schoolId: string, conversationId: string) => {
+    const path = `schools/${schoolId}/whatsapp_conversations/${conversationId}`;
+    try {
+      await updateDoc(doc(db, `schools/${schoolId}/whatsapp_conversations`, conversationId), { 
+        unread_count: 0 
+      });
+    } catch (error) {
+      console.error("Error marking as read:", error);
+    }
+  },
+
+  // Send a manual message from dashboard
+  sendMessage: async (schoolId: string, conversationId: string, phone: string, content: string) => {
+    try {
+      // 1. Send via Meta API (This should ideally happen through our server API to keep keys secret)
+      // For simplicity in this demo, if the keys were in client, we'd use them, 
+      // but guidelines say keep keys server-side.
+      // So we'll call our own server endpoint.
+      const response = await axios.post('/api/whatsapp/send', {
+        school_id: schoolId,
+        conversation_id: conversationId,
+        to: phone,
+        message: content
+      });
+
       return response.data;
-    } catch (error: any) {
-      console.error("WhatsApp Text Send Error:", error.response?.data || error.message);
+    } catch (error) {
+      console.error("Error sending message:", error);
       throw error;
     }
   }

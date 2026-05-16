@@ -156,47 +156,12 @@
         "student_id": { "type": "string" },
         "student_name": { "type": "string" },
         "parent_phone": { "type": "string" },
-        "status": { "type": "string", "enum": ["sent", "delivered", "read", "failed"] },
+        "status": { "type": "string", "enum": ["sent", "delivered", "failed"] },
         "message": { "type": "string" },
-        "type": { "type": "string", "enum": ["text", "template"] },
         "sent_at": { "type": "string", "format": "date-time" },
         "school_id": { "type": "string" }
       },
       "required": ["student_id", "parent_phone", "status", "sent_at", "school_id"]
-    },
-    "WhatsAppConversation": {
-      "title": "WhatsAppConversation",
-      "description": "Active WhatsApp chat session with a parent",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "parent_phone": { "type": "string" },
-        "parent_name": { "type": "string" },
-        "last_message": { "type": "string" },
-        "last_message_at": { "type": "string", "format": "date-time" },
-        "unread_count": { "type": "number" },
-        "student_id": { "type": "string" },
-        "school_id": { "type": "string" },
-        "mode": { "type": "string", "enum": ["agent", "human"] }
-      },
-      "required": ["parent_phone", "last_message_at", "school_id"]
-    },
-    "WhatsAppMessage": {
-      "title": "WhatsAppMessage",
-      "description": "Individual message within a conversation",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "conversation_id": { "type": "string" },
-        "direction": { "type": "string", "enum": ["inbound", "outbound"] },
-        "body": { "type": "string" },
-        "type": { "type": "string", "enum": ["text", "template", "image", "document"] },
-        "status": { "type": "string", "enum": ["sent", "delivered", "read", "failed"] },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "sender_id": { "type": "string" },
-        "school_id": { "type": "string" }
-      },
-      "required": ["conversation_id", "direction", "body", "timestamp", "school_id"]
     },
     "FeeStructure": {
       "title": "FeeStructure",
@@ -302,6 +267,63 @@
       },
       "required": ["homework_id", "student_id", "student_name", "content", "school_id"]
     },
+    "WhatsAppMessage": {
+      "title": "WhatsAppMessage",
+      "description": "Single message in a WhatsApp chat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "conversation_id": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string" },
+        "whatsapp_msg_id": { "type": "string" },
+        "school_id": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["conversation_id", "role", "content", "school_id"]
+    },
+    "WhatsAppConversation": {
+      "title": "WhatsAppConversation",
+      "description": "Active WhatsApp chat session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "phone": { "type": "string" },
+        "name": { "type": "string" },
+        "mode": { "type": "string", "enum": ["agent", "human"] },
+        "school_id": { "type": "string" },
+        "unread_count": { "type": "number" },
+        "last_message": { "type": "string" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["phone", "mode", "school_id"]
+    },
+    "WhatsAppDeliveryLog": {
+      "title": "WhatsAppDeliveryLog",
+      "description": "Log of WhatsApp message delivery events",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "whatsapp_msg_id": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "error": { "type": "string" }
+      },
+      "required": ["whatsapp_msg_id", "phone", "status"]
+    },
+    "WhatsAppAISettings": {
+      "title": "WhatsAppAISettings",
+      "description": "Configuration for school WhatsApp AI agent",
+      "type": "object",
+      "properties": {
+        "is_enabled": { "type": "boolean" },
+        "system_prompt": { "type": "string" },
+        "auto_reply_delay": { "type": "number" },
+        "allowed_topics": { "type": "array", "items": { "type": "string" } }
+      }
+    },
     "StudentIdSettings": {
       "title": "StudentIdSettings",
       "description": "Configuration for automatic student ID generation",
@@ -331,6 +353,10 @@
     "/users/{userId}": { "schema": "User", "description": "Global user profiles" },
     "/schools/{schoolId}/students/{studentId}": { "schema": "Student", "description": "Students within a school" },
     "/schools/{schoolId}/parents/{parentId}": { "schema": "Parent", "description": "Parents within a school" },
+    "/schools/{schoolId}/whatsapp_conversations/{convId}": { "schema": "WhatsAppConversation", "description": "WhatsApp conversations" },
+    "/schools/{schoolId}/whatsapp_conversations/{convId}/messages/{msgId}": { "schema": "WhatsAppMessage", "description": "WhatsApp messages" },
+    "/schools/{schoolId}/whatsapp_delivery_logs/{logId}": { "schema": "WhatsAppDeliveryLog", "description": "WhatsApp delivery tracking" },
+    "/schools/{schoolId}/settings/whatsapp_ai": { "schema": "WhatsAppAISettings", "description": "WhatsApp AI configuration" },
     "/schools/{schoolId}/attendance/{attendanceId}": { "schema": "Attendance", "description": "Attendance records" },
     "/schools/{schoolId}/fees/{feeId}": { "schema": "Fee", "description": "Fee definitions" },
     "/schools/{schoolId}/payments/{paymentId}": { "schema": "Payment", "description": "Payment records" },
@@ -338,8 +364,6 @@
     "/schools/{schoolId}/calls/{callId}": { "schema": "Call", "description": "Completed call logs" },
     "/schools/{schoolId}/call_queue/{queueId}": { "schema": "CallQueue", "description": "Active call processing queue" },
     "/schools/{schoolId}/whatsapp_logs/{logId}": { "schema": "WhatsAppLog", "description": "WhatsApp notification logs" },
-    "/schools/{schoolId}/whatsapp_conversations/{conversationId}": { "schema": "WhatsAppConversation", "description": "Real-time WhatsApp conversations" },
-    "/schools/{schoolId}/whatsapp_conversations/{conversationId}/messages/{messageId}": { "schema": "WhatsAppMessage", "description": "Messages within a conversation" },
     "/schools/{schoolId}/fee_structures/{structureId}": { "schema": "FeeStructure", "description": "Class-wise fee configurations" },
     "/schools/{schoolId}/due_records/{dueId}": { "schema": "DueRecord", "description": "Student monthly dues" },
     "/schools/{schoolId}/fee_transactions/{txId}": { "schema": "FeeTransaction", "description": "Financial transaction history" },

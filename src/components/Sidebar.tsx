@@ -30,9 +30,11 @@ export default function Sidebar() {
 
   if (!profile) return null;
 
-  const isAdmin = ['super_admin', 'school_admin', 'accountant', 'teacher'].includes(profile.role);
+  const isAdmin = ['super_admin', 'school_admin'].includes(profile.role);
+  const isAccountant = profile.role === 'accountant';
+  const isTeacher = profile.role === 'teacher';
 
-  const menuItems = isAdmin ? [
+  const menuItems = (isAdmin || isAccountant) ? [
     { icon: LayoutDashboard, label: t('dashboard'), path: '/' },
     { icon: Users, label: t('students'), path: '/students' },
     { icon: GraduationCap, label: t('teachers'), path: '/teachers' },
@@ -41,7 +43,12 @@ export default function Sidebar() {
     { icon: BookOpen, label: t('class_menu'), path: '/class' },
     { icon: ClipboardList, label: t('exam'), path: '/exam' },
     { icon: PhoneCall, label: t('ai_calls'), path: '/ai-calls' },
-    ...(profile.role !== 'teacher' ? [{ icon: MessageSquare, label: 'WhatsApp Center', path: '/whatsapp-center' }] : []),
+    ...(isAdmin ? [{ icon: MessageSquare, label: t('whatsapp'), path: '/whatsapp-center' }] : []),
+    { icon: Bell, label: t('notice'), path: '/announcements' },
+  ] : isTeacher ? [
+    { icon: LayoutDashboard, label: t('dashboard'), path: '/' },
+    { icon: Users, label: t('students'), path: '/students' },
+    { icon: CheckCircle, label: t('attendance'), path: '/attendance' },
     { icon: Bell, label: t('notice'), path: '/announcements' },
   ] : [
     { icon: GraduationCap, label: 'Portal', path: '/' },

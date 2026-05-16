@@ -24,6 +24,7 @@ export interface UserProfile {
   phone?: string;
   avatar_url?: string;
   school_id: string;
+  school_name?: string;
   linked_student_id?: string;
   createdAt: string;
   // Fields for Teacher Login
@@ -281,60 +282,6 @@ export interface PrepaidBalance {
   amount: number;
   school_id: string;
   updatedAt: string;
-}
-
-export interface WhatsAppLog {
-  id: string;
-  student_id: string;
-  student_name: string;
-  parent_phone: string;
-  status: 'sent' | 'delivered' | 'read' | 'failed';
-  message: string;
-  type: 'text' | 'template';
-  sent_at: string;
-  school_id: string;
-}
-
-export interface WhatsAppConversation {
-  id: string; // parent_phone
-  conversation_id: string; // same as parent_phone
-  parent_phone: string;
-  parent_name: string;
-  linked_student_id: string;
-  linked_student_name: string;
-  mode: 'ai' | 'human';
-  last_message: string;
-  last_message_at: any; // FieldValue or string
-  unread_count: number;
-  school_id: string;
-  created_at: any;
-  updated_at: any;
-}
-
-export interface WhatsAppMessage {
-  id: string;
-  conversation_id: string;
-  whatsapp_message_id: string;
-  sender_type: 'parent' | 'admin' | 'ai' | 'system';
-  direction: 'inbound' | 'outbound';
-  message_text: string;
-  message_type: 'text' | 'template' | 'image' | 'document';
-  media_url?: string;
-  status: 'sent' | 'delivered' | 'read' | 'failed';
-  created_at: any;
-  sent_at?: any;
-  delivered_at?: any;
-  read_at?: any;
-  school_id: string;
-}
-
-export interface WhatsAppAiSettings {
-  school_id: string;
-  is_enabled: boolean;
-  prompt_template: string;
-  welcome_message: string;
-  fall_back_message: string;
-  updated_at: any;
 }
 
 export enum OperationType {
