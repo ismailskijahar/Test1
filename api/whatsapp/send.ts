@@ -1,4 +1,4 @@
-import { adminDb, admin } from "../../src/lib/firebase-admin";
+import { adminDb, admin } from "../../src/lib/firebase-admin.ts";
 import axios from "axios";
 
 export default async function handler(req: any, res: any) {

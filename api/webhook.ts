@@ -1,4 +1,4 @@
-import { adminDb, admin } from "../src/lib/firebase-admin";
+import { adminDb, admin } from "../src/lib/firebase-admin.ts";
 import OpenAI from "openai";
 import axios from "axios";
 
